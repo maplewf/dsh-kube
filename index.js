@@ -1358,6 +1358,84 @@ class KubeService {
     return { ok: true, count: rows.length, rows }
   }
 
+  /**
+   * Custom resources via a projected table instead of the full JSON document.
+   * Big CRD collections (e.g. Argo Applications: ~24MB of JSON for a few
+   * hundred objects) sit at the stdout cap and pay a full JSON parse; asking
+   * kubectl for just the declared printer columns is ~350x smaller. Returns
+   * null when the projection cannot be used, so the caller falls back to JSON.
+   */
+  async listCustomProjected(cluster, kind, scope, selectorArgs, info) {
+    if (!info) return null
+    // Name/namespace/age already have dedicated columns; repeating them as
+    // printer columns would duplicate the client's own columns.
+    const columns = (info.printerColumns || []).filter((column) => !/^(name|namespace|age)$/i.test(column.name))
+    // Without printer columns the JSON path still derives status from
+    // status.phase / a Ready condition. A projected table cannot, so keep JSON
+    // for those types (they are usually small anyway).
+    if (columns.length === 0) return null
+    const namespaced = /namespaced/i.test(String(info.scope))
+    const headers = ['NAME']
+    const paths = ['.metadata.name']
+    if (namespaced) { headers.push('NAMESPACE'); paths.push('.metadata.namespace') }
+    headers.push('AGE'); paths.push('.metadata.creationTimestamp')
+    const labels = []
+    columns.forEach((column, index) => {
+      const label = `C${index}`
+      labels.push(label)
+      headers.push(label)
+      paths.push(column.jsonPath)
+    })
+    const expression = headers.map((header, index) => `${header}:${paths[index]}`).join(',')
+    const result = await this.kubectl(
+      cluster,
+      ['get', kind, ...scope, ...selectorArgs, '-o', `custom-columns=${expression}`],
+      { timeoutMs: 30000 },
+    )
+    if (!result.ok) {
+      // A bad printer-column path makes kubectl reject the whole expression;
+      // that is the one case where a JSON retry is the right answer. Any other
+      // failure (auth, connectivity) must surface unchanged.
+      return result.kind === 'error' ? null : result
+    }
+    const cellsList = splitTable(result.stdout, headers)
+    if (!cellsList) return null
+    const cell = (cells, header) => {
+      const value = cells[headers.indexOf(header)] ?? ''
+      return value === '<none>' || value === '<nil>' ? undefined : value
+    }
+    const rows = cellsList
+      .map((cells) => {
+        const created = cell(cells, 'AGE') || ''
+        const row = {
+          name: cell(cells, 'NAME') || '',
+          namespace: namespaced ? (cell(cells, 'NAMESPACE') || null) : null,
+          created,
+          age: humanAge(created),
+          status: '',
+          ready: '',
+          crdKind: info.kind,
+          crdGroup: info.group,
+        }
+        const parts = []
+        columns.forEach((column, index) => {
+          const text = printerValue(cell(cells, labels[index]), column.type)
+          if (text === '') return
+          parts.push(`${column.name}=${text}`)
+        })
+        if (parts.length > 0) {
+          row.extra = parts.join(' · ')
+          // Match decorateCustomRow: the first declared column is normally the
+          // resource's readiness/status (e.g. Argo's "Sync Status").
+          const primary = printerValue(cell(cells, labels[0]), columns[0].type)
+          if (primary !== '') row.status = primary
+        }
+        return row
+      })
+      .filter((row) => row.name)
+    return { ok: true, count: rows.length, rows }
+  }
+
   async list(cluster, kind, { namespace, allNamespaces, selector } = {}) {
     const scope = allNamespaces ? ['-A'] : scopeArgs(kind, namespace)
     const selectorArgs = selector ? ['-l', selector] : []
@@ -1380,10 +1458,16 @@ class KubeService {
       return this.listSubjectAggregates(cluster, base === 'rbacgroups' ? 'Group' : 'User')
     }
 
-    // Custom resources are parsed from JSON, which needs the CRD index for the
-    // declared printer columns; load it before the first such listing.
+    // Custom resources need the CRD index (declared printer columns) before the
+    // first listing. With printer columns available, list from a projected
+    // table instead of the full JSON document; fall back to JSON when the
+    // projection cannot be parsed.
     if (isCustomResourceKind(kind)) {
       await this.ensureCrds(cluster)
+      const projected = await this.listCustomProjected(
+        cluster, kind, scope, selectorArgs, this.crdInfo(cluster, kind),
+      )
+      if (projected) return projected
     }
 
     // Tabular path for common kinds: output is ~100x smaller than `-o json`, so
@@ -1435,31 +1519,46 @@ class KubeService {
       }
     }
     // Aggregate per-node pod count + summed CPU/memory requests (all namespaces).
-    const pods = await this.kubectl(cluster, ['get', 'pods', '-A', '-o', 'json'], { timeoutMs: 60000 })
+    // Deliberately NOT `-o json`: on large clusters that document exceeds the
+    // stdout cap (MAX_STDOUT), the JSON gets truncated and every aggregate would
+    // silently read 0. A jsonpath projection is ~100KB even with 1400 pods: one
+    // line per pod, tab-separated node / cpu requests / memory requests, each
+    // request list comma-separated (empty when a container sets no request).
+    const pods = await this.kubectl(cluster, ['get', 'pods', '-A', '-o',
+      'jsonpath={range .items[*]}{.spec.nodeName}{"\\t"}{range .spec.containers[*]}{.resources.requests.cpu}{","}{end}{"\\t"}{range .spec.containers[*]}{.resources.requests.memory}{","}{end}{"\\n"}{end}',
+    ], { timeoutMs: 60000 })
+    // Declared outside the branch: the per-node assignment below runs even when
+    // the pod query failed, and a block-scoped `used` would throw
+    // "used is not defined" there.
+    const used = {}
     if (pods.ok) {
-      let podJson = null
-      try { podJson = JSON.parse(pods.stdout) } catch { podJson = null }
-      const used = {}
-      if (podJson && Array.isArray(podJson.items)) {
-        for (const pod of podJson.items) {
-          const node = pod.spec && pod.spec.nodeName
-          if (!node) continue
-          const entry = used[node] || (used[node] = { count: 0, cpu: 0, memory: 0 })
-          entry.count += 1
-          for (const c of (pod.spec && pod.spec.containers) || []) {
-            const r = (c.resources && c.resources.requests) || {}
-            entry.cpu += cpuToMills(r.cpu)
-            entry.memory += memToBytes(r.memory)
-          }
+      for (const line of String(pods.stdout || '').split('\n')) {
+        if (!line) continue
+        const parts = line.split('\t')
+        if (parts.length < 3) continue
+        const node = parts[0].trim()
+        if (!node) continue
+        const entry = used[node] || (used[node] = { count: 0, cpu: 0, memory: 0 })
+        entry.count += 1
+        for (const value of parts[1].split(',')) {
+          const v = value.trim()
+          if (v) entry.cpu += cpuToMills(v)
+        }
+        for (const value of parts[2].split(',')) {
+          const v = value.trim()
+          if (v) entry.memory += memToBytes(v)
         }
       }
-      for (const r of rows) {
-        const a = cap[r.name] || { cpu: 0, memory: 0, pods: 0 }
-        const u = used[r.name] || { count: 0, cpu: 0, memory: 0 }
-        r.cpu = `${fmtCpu(u.cpu)}/${fmtCpuCapacity(a.cpu)}`
-        r.memory = `${fmtMem(u.memory)}/${fmtMemCapacity(a.memory)}`
-        r.podCount = `${u.count}/${a.pods}`
-      }
+    }
+    // Assign the per-node usage either way: if the pod query failed we still
+    // show the capacity and mark the usage as "—" rather than printing 0, which
+    // would look like an idle node instead of a failed read.
+    for (const r of rows) {
+      const a = cap[r.name] || { cpu: 0, memory: 0, pods: 0 }
+      const u = used[r.name] || { count: 0, cpu: 0, memory: 0 }
+      r.cpu = pods.ok ? `${fmtCpu(u.cpu)}/${fmtCpuCapacity(a.cpu)}` : `—/${fmtCpuCapacity(a.cpu)}`
+      r.memory = pods.ok ? `${fmtMem(u.memory)}/${fmtMemCapacity(a.memory)}` : `—/${fmtMemCapacity(a.memory)}`
+      r.podCount = pods.ok ? `${u.count}/${a.pods}` : `—/${a.pods}`
     }
     return { ok: true, count: rows.length, rows }
   }

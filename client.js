@@ -97,6 +97,11 @@ window.__ModuleLoader__.load({
       'refresh': '刷新',
       'auto.refresh': '自动刷新',
       'filter.placeholder': '按名称过滤…',
+      'filter.col': '过滤…',
+      'filter.all': '全部',
+      'filter.selected': '项',
+      'node.podsTitle': '查看该节点上的 Pod',
+      'filter.nomatch': '没有匹配的值',
       'btn.switch': '切换',
       'btn.active': '当前集群',
       'btn.cancel': '取消',
@@ -116,6 +121,7 @@ window.__ModuleLoader__.load({
       'edit.secret': 'Secret 的 data 编辑时显示明文，保存时会自动做 base64 编码。',
       'btn.close': '关闭',
       'btn.clear': '清除过滤',
+      'sort.toggle': '点击排序（升序/降序/取消）',
       'login.title': '登录集群',
       'login.method.browser': '浏览器登录（推荐）',
       'login.method.device': '设备码登录',
@@ -246,7 +252,7 @@ window.__ModuleLoader__.load({
       'col.vpamem': '内存推荐',
       'col.vpaprovided': '已提供',
       'col.version': '版本',
-      'col.podcount': 'Pod 数',
+      'col.podcount': 'Pod',
       'col.cpu': 'CPU',
       'col.memory': '内存',
       'col.type': '类型',
@@ -342,6 +348,11 @@ window.__ModuleLoader__.load({
       'refresh': 'Refresh',
       'auto.refresh': 'Auto-refresh',
       'filter.placeholder': 'Filter by name…',
+      'filter.col': 'Filter…',
+      'filter.all': 'All',
+      'filter.selected': 'selected',
+      'node.podsTitle': 'Show pods on this node',
+      'filter.nomatch': 'No matching value',
       'btn.switch': 'Switch',
       'btn.active': 'Current cluster',
       'btn.cancel': 'Cancel',
@@ -361,6 +372,7 @@ window.__ModuleLoader__.load({
       'edit.secret': 'Secret data is shown in plaintext while editing; it is base64-encoded automatically on save.',
       'btn.close': 'Close',
       'btn.clear': 'Clear filter',
+      'sort.toggle': 'Click to sort (asc / desc / none)',
       'login.title': 'Cluster login',
       'login.method.browser': 'Browser (recommended)',
       'login.method.device': 'Device code',
@@ -474,7 +486,7 @@ window.__ModuleLoader__.load({
       'col.crdscope': 'Scope',
       'col.crdversion': 'Versions',
       'col.version': 'Version',
-      'col.podcount': 'Pods',
+      'col.podcount': 'Pod',
       'col.cpu': 'CPU',
       'col.memory': 'Memory',
       'col.type': 'Type',
@@ -644,6 +656,24 @@ window.__ModuleLoader__.load({
 .dk-pf-row.off{opacity:.5;cursor:not-allowed}
 .dk-table{width:100%;border-collapse:collapse}
 .dk-table th{text-align:left;font-weight:600;color:#fff;font-size:12px;padding:6px 10px;border-bottom:1px solid #000;position:sticky;top:0;background:#000;z-index:1}
+.dk-th-sort{cursor:pointer;user-select:none}
+.dk-th-sort:hover .dk-th-label{color:#ffd60a}
+.dk-th-sort.on .dk-th-label{color:#ffd60a}
+.dk-th-label{display:inline-flex;align-items:center;gap:3px}
+.dk-sort-arrow{font-size:11px;color:#ffd60a}
+.dk-colfilter{display:inline-flex;align-items:center;margin-left:5px;vertical-align:middle}
+.dk-colfilter-btn{display:inline-flex;align-items:center;gap:2px;height:15px;padding:0 2px;border:0;background:transparent;color:#6b7280;cursor:pointer;line-height:1}
+.dk-colfilter-btn:hover,.dk-colfilter-btn.open{color:#ffd60a}
+.dk-colfilter-btn.on{color:#ffd60a}
+.dk-colfilter-count{font-size:10px;font-weight:600}
+.dk-colfilter-panel{position:fixed;z-index:9999;min-width:220px;max-height:300px;overflow-y:auto;padding:8px;border-radius:8px;border:1px solid #3d3d3d;background:#111318;color:#f5f7fa;box-shadow:0 12px 34px rgba(0,0,0,.6)}
+.dk-colfilter-panel .dk-multi-item{color:#f5f7fa}
+.dk-colfilter-panel .dk-multi-item:hover{background:#232a36}
+.dk-colfilter-panel .dk-multi-item.on{background:#232a36;color:#fff;font-weight:600}
+.dk-colfilter-panel .dk-multi-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:inherit}
+.dk-colfilter-panel .dk-input{background:#0a0c10;color:#f5f7fa;border-color:#3d3d3d}
+.dk-colfilter-panel .dk-multi-divider{background:#2c333e}
+.dk-multi-empty{padding:6px 8px;font-size:11px;color:#9aa4b2}
 .dk-table td{padding:7px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:12px;vertical-align:top}
 .dk-table tbody tr:not(.dk-subrow){cursor:pointer}
 .dk-table tbody tr:not(.dk-subrow):hover td{background:#ffd60a}
@@ -718,6 +748,7 @@ window.__ModuleLoader__.load({
 .dk-matrix-cell{font-size:12px;line-height:1}
 .dk-matrix-ok{color:#4ade80;font-weight:600}
 .dk-matrix-no{color:#f87171;font-weight:600}
+.dk-count-link{display:inline-block;padding:0 2px;border:0;background:transparent;color:var(--dsw-alias-brand-primary);font:12px/1 var(--ds-font-family-code);text-decoration:underline;cursor:pointer}
 .dk-rules-link{display:inline-block;padding:0 2px;border:0;background:transparent;color:var(--dsw-alias-brand-primary);font:12px/1 var(--ds-font-family-code);text-decoration:underline;cursor:pointer}
 .dk-detail-tab .dk-pre-wrap{white-space:pre-wrap;word-break:break-word;display:block;font:12px/1.5 var(--ds-font-family-code)}
 .dk-detail-tab .dk-apply-note{padding:8px 10px;margin-bottom:8px;border-radius:8px;border:1px solid #4ade80;background:#101a12;color:#86efac;font-size:12px;word-break:break-word}
@@ -850,6 +881,88 @@ window.__ModuleLoader__.load({
                 h('input', { type: 'checkbox', checked: all || value.includes(name), readOnly: true }),
                 h('span', { className: 'dk-mono', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, name),
               )),
+            )
+          : null,
+      )
+    }
+
+    /**
+     * Compact multi-select used in the pod list table-header filter cells. A small
+     * button shows "全部" or the number of selected values; opening it exposes a
+     * searchable checkbox list, so one column can be narrowed to several discrete
+     * values (Running, CrashLoopBackOff …) rather than a free-text substring.
+     */
+    function ColFilter({ t, value, options, onChange }) {
+      const [open, setOpen] = useState(false)
+      const [query, setQuery] = useState('')
+      const [pos, setPos] = useState(null)
+      const btnRef = useRef(null)
+      const panelRef = useRef(null)
+      // The panel is fixed-positioned from the button's screen rect: table headers
+      // are sticky (their own stacking context), so an absolutely positioned panel
+      // would be clipped behind the neighbouring header cells.
+      const showPanel = () => {
+        const rect = btnRef.current && btnRef.current.getBoundingClientRect()
+        if (rect) {
+          const left = Math.max(8, Math.min(rect.left, (window.innerWidth || 1200) - 232))
+          setPos({ left, top: rect.bottom + 4 })
+        }
+        setOpen(true)
+      }
+      useEffect(() => {
+        if (!open) return
+        const onDown = (event) => {
+          if (panelRef.current && panelRef.current.contains(event.target)) return
+          if (btnRef.current && btnRef.current.contains(event.target)) return
+          setOpen(false)
+        }
+        const onKey = (event) => { if (event.key === 'Escape') setOpen(false) }
+        document.addEventListener('mousedown', onDown)
+        document.addEventListener('keydown', onKey)
+        return () => {
+          document.removeEventListener('mousedown', onDown)
+          document.removeEventListener('keydown', onKey)
+        }
+      }, [open])
+      const all = value.length === 0
+      const shown = options.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()))
+      const toggle = (name) => {
+        onChange(all ? [name] : (value.includes(name) ? value.filter((v) => v !== name) : [...value, name]))
+      }
+      return h('span', { className: 'dk-colfilter' },
+        h('button', {
+          ref: btnRef,
+          className: 'dk-colfilter-btn' + (all ? '' : ' on') + (open ? ' open' : ''),
+          type: 'button',
+          title: t('filter.col'),
+          onClick: (event) => { event.stopPropagation(); if (open) setOpen(false); else showPanel() },
+        },
+          h('svg', { width: 11, height: 11, viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+            h('path', { d: 'M1 1.5h14l-5.4 6.6V15l-3.2-1.6V8.1z', fill: 'currentColor' }),
+          ),
+          all ? null : h('span', { className: 'dk-colfilter-count' }, String(value.length)),
+        ),
+        open
+          ? h('div', {
+              ref: panelRef,
+              className: 'dk-colfilter-panel',
+              style: pos ? { left: `${pos.left}px`, top: `${pos.top}px` } : null,
+              onClick: (event) => event.stopPropagation(),
+            },
+              h('input', {
+                className: 'dk-input grow', style: { marginBottom: 6 }, placeholder: t('filter.placeholder'),
+                value: query, onChange: (event) => setQuery(event.target.value), autoFocus: true,
+              }),
+              h('div', { className: 'dk-multi-item' + (all ? ' on' : ''), onClick: () => onChange([]) },
+                h('input', { type: 'checkbox', checked: all, readOnly: true }), h('span', null, t('filter.all')),
+              ),
+              h('div', { className: 'dk-multi-divider' }),
+              shown.length === 0
+                ? h('div', { className: 'dk-multi-empty' }, t('filter.nomatch'))
+                : shown.map((name) => h('div', { className: 'dk-multi-item' + (all || value.includes(name) ? ' on' : ''), key: name, onClick: () => toggle(name) },
+                    h('input', { type: 'checkbox', checked: all || value.includes(name), readOnly: true }),
+                    h('span', { className: 'dk-multi-text' }, name),
+                  )),
             )
           : null,
       )
@@ -2549,6 +2662,28 @@ window.__ModuleLoader__.load({
     // table while the refresh runs again.
     let lastViewState = null
 
+    // Numeric sort key for a node usage cell such as "1.75/8", "1.4Gi/32Gi" or
+    // "12/110": parse the *used* part of the fraction. Unparsable ("—" when the
+    // usage read failed) yields -1 so it sorts to the front ascending.
+    const nodeMetric = (row, key) => {
+      const used = String((row && row[key]) || '').split('/')[0].trim()
+      if (!used || used === '—') return -1
+      if (key === 'cpu') {
+        const n = parseFloat(used)
+        if (!Number.isFinite(n)) return -1
+        return used.endsWith('m') ? n : n * 1000
+      }
+      if (key === 'memory') {
+        const m = /^([\d.]+)\s*(Ki|Mi|Gi|Ti|K|M|G|T)$/.exec(used)
+        if (!m) return -1
+        const mult = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 }[m[2]]
+        const n = parseFloat(m[1])
+        return Number.isFinite(n) ? n * mult : -1
+      }
+      const n = parseInt(used, 10)
+      return Number.isNaN(n) ? -1 : n
+    }
+
     function ResourceView({ t, openDetail, openLogs, openShell, openRules }) {
       useStyles()
       const [boot, setBoot] = useState(null)
@@ -2579,6 +2714,18 @@ window.__ModuleLoader__.load({
       // workload's pod column is clicked; null = no filter. Carries the source
       // workload so the banner can name <kind> <name>.
       const [podFilter, setPodFilter] = useState(null)
+      // Pod list column sort: { key: 'name'|'namespace'|'status'|'age'|'ip'|'node',
+      // dir: 1 asc | -1 desc } or null (no sort). Only the pod list is sortable.
+      const [podSort, setPodSort] = useState(null)
+      // Pod list per-column filters (status / node / ip). Only those three
+      // columns are filterable; each holds an array of selected values (empty
+      // array = no filter / show all), chosen via a multi-select dropdown.
+      const [podColFilter, setPodColFilter] = useState({ status: [], node: [], ip: [] })
+      // Node list column sort: { key: 'cpu'|'memory'|'podCount'|'arch'|'type'|'zone'|'age',
+      // dir: 1 asc | -1 desc } or null. Node list per-column filters: arch/type/zone,
+      // each an array of selected values (empty = show all).
+      const [nodeSort, setNodeSort] = useState(null)
+      const [nodeColFilter, setNodeColFilter] = useState({ arch: [], type: [], zone: [] })
       // Pod rows expanded to show their containers. Key = "ns/name", value =
       // { loading, containers, initContainers, error }. Containers are fetched
       // lazily on first expand and kept while the row stays expanded.
@@ -2869,6 +3016,10 @@ window.__ModuleLoader__.load({
         setCrdTarget(null)
         setFilter('')
         setPodFilter(null)
+        setPodSort(null)
+        setPodColFilter({ status: [], node: [], ip: [] })
+        setNodeSort(null)
+        setNodeColFilter({ arch: [], type: [], zone: [] })
         setExpanded({})
         try { await call('switch', { cluster: value }) } catch {}
         const need = await probeSelected(value)
@@ -2887,6 +3038,10 @@ window.__ModuleLoader__.load({
         setNsSel(value)
         setRows([])
         setPodFilter(null)
+        setPodSort(null)
+        setPodColFilter({ status: [], node: [], ip: [] })
+        setNodeSort(null)
+        setNodeColFilter({ arch: [], type: [], zone: [] })
         setExpanded({})
         loadList(selected, listKind, value)
       }, [selected, listKind, loadList])
@@ -2896,6 +3051,10 @@ window.__ModuleLoader__.load({
         setCrdTarget(null)
         setRows([])
         setPodFilter(null)
+        setPodSort(null)
+        setPodColFilter({ status: [], node: [], ip: [] })
+        setNodeSort(null)
+        setNodeColFilter({ arch: [], type: [], zone: [] })
         setExpanded({})
         const scope = isKindScoped(value) ? [] : nsSel
         if (scope.length !== nsSel.length) setNsSel(scope)
@@ -2914,6 +3073,10 @@ window.__ModuleLoader__.load({
         setFilter('')
         setRows([])
         setPodFilter(null)
+        setPodSort(null)
+        setPodColFilter({ status: [], node: [], ip: [] })
+        setNodeSort(null)
+        setNodeColFilter({ arch: [], type: [], zone: [] })
         setExpanded({})
         // Open on all namespaces: the CRD list is cluster-scoped, so any
         // namespace selection still around belongs to an earlier kind.
@@ -2941,6 +3104,10 @@ window.__ModuleLoader__.load({
               pods: result.pods || [],
               namespace: result.namespace || row.namespace || 'default',
             })
+            setPodSort(null)
+            setPodColFilter({ status: [], node: [], ip: [] })
+            setNodeSort(null)
+            setNodeColFilter({ arch: [], type: [], zone: [] })
             setExpanded({})
             const scope = [result.namespace || row.namespace || 'default']
             if (scope[0] !== nsSel[0]) setNsSel(scope)
@@ -2952,6 +3119,24 @@ window.__ModuleLoader__.load({
           setListError({ kind: 'error', error: '获取关联 Pod 失败' })
         }
       }, [selected, kind, nsSel, loadList])
+
+      // Node row → its Pods column: switch to the pod list and narrow it to the
+      // pods scheduled on that node. The node column filter does the narrowing
+      // precisely (pod names are not unique across namespaces, so a name list
+      // would over-match), and pods list always spans all namespaces.
+      const openNodePods = useCallback((nodeName) => {
+        setCrdTarget(null)
+        setKind('pods')
+        setRows([])
+        setPodFilter(null)
+        setPodSort(null)
+        setPodColFilter({ status: [], node: nodeName ? [String(nodeName)] : [], ip: [] })
+        setNodeSort(null)
+        setNodeColFilter({ arch: [], type: [], zone: [] })
+        setExpanded({})
+        if (nsSel.length) setNsSel([])
+        loadList(selected, 'pods', [])
+      }, [selected, nsSel, loadList])
 
       const afterLogin = useCallback(async () => {
         setLogin(null)
@@ -3004,14 +3189,60 @@ window.__ModuleLoader__.load({
 
       const filtered = useMemo(() => {
         const needle = filter.trim().toLowerCase()
+        const podList = String(kind).split('.')[0] === 'pods'
         let out = rows
         if (needle) out = out.filter((row) => String(row.name || '').toLowerCase().includes(needle))
         if (podFilter) {
           const set = new Set(podFilter.pods)
           out = out.filter((row) => set.has(row.name))
         }
+        // Pod list only: per-column filters (status / node / ip) then sorting.
+        // The columns are name, namespace, status, age, ip, node; age compares by
+        // creationTimestamp so "2d" sorts before "5m", the other five by text.
+        if (podList) {
+          const colF = podColFilter || {}
+          if (colF.status && colF.status.length) out = out.filter((row) => colF.status.includes(String(row.status || '')))
+          if (colF.node && colF.node.length) out = out.filter((row) => colF.node.includes(String(row.node || '')))
+          if (colF.ip && colF.ip.length) out = out.filter((row) => colF.ip.includes(String(row.ip || '')))
+          if (podSort) {
+            const { key, dir } = podSort
+            out = out.slice().sort((a, b) => {
+              if (key === 'age') {
+                const ta = a.created ? new Date(a.created).getTime() : 0
+                const tb = b.created ? new Date(b.created).getTime() : 0
+                return (ta - tb) * dir
+              }
+              const va = String(a[key] ?? '').toLowerCase()
+              const vb = String(b[key] ?? '').toLowerCase()
+              return va.localeCompare(vb) * dir
+            })
+          }
+        }
+        // Node list only: per-column filters (arch / type / zone) then sorting by
+        // the usage fraction's numerator, creationTimestamp for age, text otherwise.
+        if (String(kind).split('.')[0] === 'nodes') {
+          const colF = nodeColFilter || {}
+          for (const key of ['arch', 'type', 'zone']) {
+            const picked = colF[key]
+            if (picked && picked.length) out = out.filter((row) => picked.includes(String(row[key] || '')))
+          }
+          if (nodeSort) {
+            const { key, dir } = nodeSort
+            out = out.slice().sort((a, b) => {
+              if (key === 'age') {
+                const ta = a.created ? new Date(a.created).getTime() : 0
+                const tb = b.created ? new Date(b.created).getTime() : 0
+                return (ta - tb) * dir
+              }
+              if (key === 'cpu' || key === 'memory' || key === 'podCount') {
+                return (nodeMetric(a, key) - nodeMetric(b, key)) * dir
+              }
+              return String(a[key] ?? '').toLowerCase().localeCompare(String(b[key] ?? '').toLowerCase()) * dir
+            })
+          }
+        }
         return out
-      }, [rows, filter, podFilter])
+      }, [rows, filter, podFilter, kind, podColFilter, podSort, nodeColFilter, nodeSort])
 
       // A drilled-in CRD kind is tracked explicitly: it is not in KINDS, so its
       // namespace scope comes from the CRD row it was opened from.
@@ -3207,7 +3438,13 @@ window.__ModuleLoader__.load({
         memory: (row) => td.mono(row, 'memory'),
         type: (row) => td.plain(row, 'type'),
         zone: (row) => td.plain(row, 'zone'),
-        podCount: (row) => h('td', null, String(row.podCount ?? '')),
+        podCount: (row) => h('td', null,
+          row.podCount
+            ? h('button', {
+                className: 'dk-count-link', title: t('node.podsTitle'),
+                onClick: (event) => { event.stopPropagation(); openNodePods(row.name) },
+              }, String(row.podCount))
+            : '—'),
         spec: (row) => td.mono(row, 'spec'),
         arch: (row) => td.mono(row, 'arch'),
         class: (row) => td.mono(row, 'class'),
@@ -3335,9 +3572,65 @@ window.__ModuleLoader__.load({
       // Custom resources have no shared schema: name/namespace/status plus the
       // values their CRD's additionalPrinterColumns produced (backend → extra).
       const crdCols = ['name', 'ns', 'status', 'extra', 'age']
+      // Distinct values for the column filters, derived from the rows currently
+      // loaded so each dropdown lists real choices. An empty selection in a
+      // column means "show all".
+      const distinctOf = (fn) => [...new Set(rows.map(fn).filter((v) => v !== null && v !== undefined && v !== ''))].sort()
+      const podColOptions = useMemo(() => ({
+        status: distinctOf((r) => String(r.status || '')),
+        node: distinctOf((r) => String(r.node || '')),
+        ip: distinctOf((r) => String(r.ip || '')),
+      }), [rows])
+      const nodeColOptions = useMemo(() => ({
+        arch: distinctOf((r) => String(r.arch || '')),
+        type: distinctOf((r) => String(r.type || '')),
+        zone: distinctOf((r) => String(r.zone || '')),
+      }), [rows])
+
+      // Sortable/filterable header cell. Clicking the label cycles asc → desc → none;
+      // a multi-select (when opts.filter is set) narrows that column to chosen values
+      // without triggering the sort. Pod and node lists keep separate sort/filter state,
+      // so the factory takes them as arguments.
+      const makeTh = (sort, setSort, colFilter, setColFilter, optionsMap) => (key, label, opts = {}) => {
+        const active = sort && sort.key === key
+        const arrow = active ? (sort.dir === 1 ? '↑' : '↓') : ''
+        const filterKey = opts.filter
+        const options = filterKey ? optionsMap[filterKey] || [] : []
+        return h('th', {
+          className: 'dk-th-sort' + (active ? ' on' : ''),
+          title: t('sort.toggle'),
+          onClick: () => setSort((prev) => {
+            if (!prev || prev.key !== key) return { key, dir: 1 }
+            if (prev.dir === 1) return { key, dir: -1 }
+            return null
+          }),
+        },
+          h('span', { className: 'dk-th-label' }, label, active ? h('span', { className: 'dk-sort-arrow' }, arrow) : null,
+            filterKey ? h(ColFilter, {
+              t,
+              value: colFilter[filterKey] || [],
+              options,
+              onChange: (next) => setColFilter({ ...colFilter, [filterKey]: next }),
+            }) : null,
+          ),
+        )
+      }
+      const podTh = makeTh(podSort, setPodSort, podColFilter, setPodColFilter, podColOptions)
+      // Node list: cpu/memory/podCount/arch/type/zone/age are sortable; arch/type/zone
+      // additionally offer a multi-select filter.
+      const nodeTh = makeTh(nodeSort, setNodeSort, nodeColFilter, setNodeColFilter, nodeColOptions)
+      const NODE_SORTABLE = { cpu: 'col.cpu', memory: 'col.memory', podCount: 'col.podcount', arch: 'col.arch', type: 'col.type', zone: 'col.zone', age: 'col.age' }
+      const NODE_FILTERABLE = { arch: true, type: true, zone: true }
+
       const spec = activeCrd ? crdCols : (kindCols[loggableBase] || genericCols)
+      const isNodes = loggableBase === 'nodes'
       const columns = spec
-        .map((col) => ({ th: TH[col](), td: td[col] }))
+        .map((col) => ({
+          th: isNodes && NODE_SORTABLE[col]
+            ? nodeTh(col, t(NODE_SORTABLE[col]), NODE_FILTERABLE[col] ? { filter: col } : {})
+            : TH[col](),
+          td: td[col],
+        }))
         .filter((entry) => entry.th !== null)
       const colCount = isPods
         ? (1
@@ -3478,13 +3771,13 @@ window.__ModuleLoader__.load({
               h('tr', null,
                 isPods
                   ? [
-                      h('th', null, t('col.name')),
-                      showNamespaceColumn ? h('th', null, t('col.namespace')) : null,
+                      podTh('name', t('col.name')),
+                      showNamespaceColumn ? podTh('namespace', t('col.namespace')) : null,
                       h('th', null, t('col.ready')),
-                      h('th', null, t('col.status')),
-                      h('th', null, t('col.age')),
-                      h('th', null, t('col.ip')),
-                      h('th', null, t('col.node')),
+                      podTh('status', t('col.status'), { filter: 'status' }),
+                      podTh('age', t('col.age')),
+                      podTh('ip', t('col.ip')),
+                      podTh('node', t('col.node'), { filter: 'node' }),
                       h('th', { style: { width: 96 } }, t('col.forwards')),
                       showLogsColumn ? h('th', { style: { width: 64 } }, t('col.logs')) : null,
                       showOpsColumn ? h('th', { style: { width: 108 } }, t('col.ops')) : null,
