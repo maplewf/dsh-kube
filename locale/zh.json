@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Kubernetes",
+    "description": "浏览集群与资源，并为智能体提供基于 kubectl 的工具。支持 kubeconfig exec 凭据插件，包括 kubelogin 的 OIDC 登录。",
+    "detail": "docs/DETAIL.md"
+  }
+}

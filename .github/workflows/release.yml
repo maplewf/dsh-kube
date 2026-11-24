@@ -1,0 +1,65 @@
+name: Release & publish plugin
+
+# 打版本 tag（如 v0.1.0）时：打包插件、生成并发布 DSH 插件市场索引到 GitHub Pages，
+# 并在 GitHub Releases 里附上 .tgz 包。也可手动触发（workflow_dispatch）重发布当前 commit。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 创建 GitHub Release
+  pages: write      # 部署到 GitHub Pages
+  id-token: write   # Pages 部署所需
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 防止 tag 与 package.json 版本不一致导致索引版本错乱
+      - name: Validate tag matches package version
+        if: github.ref_type == 'tag'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag '$GITHUB_REF_NAME' 与 package.json 版本 '$ver' 不一致"
+            exit 1
+          fi
+
+      # 打包插件 bundle（dsh-kube-<version>.tgz）
+      - name: Pack the bundle
+        run: npm pack
+
+      # 生成 site/index.json + site/icons/（git source，固定到本次提交 SHA）
+      - name: Generate plugin-market index
+        run: node scripts/generate-index.mjs
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+
+      # 把索引上传为 GitHub Pages 部署工件
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      # 创建 GitHub Release 并附上 .tgz 包
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dsh-kube-*.tgz
+          generate_release_notes: true
+
+      # 部署到 GitHub Pages（仓库 Settings -> Pages -> Source 需选 "GitHub Actions"）
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

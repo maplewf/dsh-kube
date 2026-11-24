@@ -1,0 +1,4 @@
+# Bundle patch for dsh-kube: inserts the plugin row into the profile composition.
+- insert:
+    - id: kube
+      name: 'dsh-kube'

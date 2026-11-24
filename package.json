@@ -1,0 +1,45 @@
+{
+  "name": "dsh-kube",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kubernetes access for DeepSeek Harness: kubectl-backed tools, interactive OIDC login, and a resource panel.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "assets",
+    "lib"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22",
+    "dsh": "0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0"
+  },
+  "main": "index.js"
+}

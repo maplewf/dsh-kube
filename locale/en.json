@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Kubernetes",
+    "description": "Browse clusters and resources, and give the agent kubectl-backed tools. Supports kubeconfig exec credential plugins including kubelogin OIDC sign-in.",
+    "detail": "docs/DETAIL.md"
+  }
+}
