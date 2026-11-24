@@ -1,6 +1,6 @@
 {
   "name": "dsh-kube",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Kubernetes access for DeepSeek Harness: kubectl-backed tools, interactive OIDC login, and a resource panel.",
