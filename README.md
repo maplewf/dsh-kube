@@ -81,6 +81,7 @@ Each context shows its auth method, probe status, and a login button. Login reus
 
 - **DSH**: `engines.dsh` requires `0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`; Node `>=22`.
 - A local **`kubectl`** in `$PATH` (all reads/writes go through it).
+- **OIDC login** (for kubeconfigs whose `exec` command is `oidc-login`): install the [kubelogin](https://github.com/int128/kubelogin) kubectl plugin (`oidc-login`) and ensure it is on `$PATH`. See its [installation guide](https://github.com/int128/kubelogin#installation).
 - **`node-pty`** (ships with DSH) for the container terminal.
 - js-yaml and xterm.js are vendored — no network or extra deps.
 - On Windows, browser bridging needs WSL's `/mnt/c/Windows/System32/cmd.exe`; without it you must copy the authorization link manually.

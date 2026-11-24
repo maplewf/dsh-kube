@@ -83,6 +83,7 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 
 - **DSH**：`engines.dsh` 要求 `0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`；Node `>=22`。
 - **本机 `kubectl`** 可执行（在 `$PATH` 中）。所有读写都通过它完成。
+- **OIDC 登录**（kubeconfig 的 `exec` 命令为 `oidc-login` 时）：需要安装 kubectl 插件 [kubelogin](https://github.com/int128/kubelogin)（命令名 `oidc-login`）并确保其在 `$PATH`。安装方法见其[安装文档](https://github.com/int128/kubelogin#installation)。
 - **`node-pty`**：随 DSH 一起安装，容器终端依赖它（不需要单独装）。
 - js-yaml 与 xterm.js 已内嵌在插件内，**无需外网或额外依赖**。
 - Windows 下浏览器桥接依赖 WSL 的 `/mnt/c/Windows/System32/cmd.exe`；没有它时只能复制授权链接手动打开。
