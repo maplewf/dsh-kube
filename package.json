@@ -1,9 +1,24 @@
 {
   "name": "dsh-kube",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Kubernetes access for DeepSeek Harness: kubectl-backed tools, interactive OIDC login, and a resource panel.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "kubernetes",
+    "kubectl",
+    "k8s",
+    "plugin",
+    "oidc"
+  ],
+  "license": "Apache-2.0",
+  "author": "maplewf",
+  "homepage": "https://github.com/maplewf/dsh-kube#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maplewf/dsh-kube.git"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
