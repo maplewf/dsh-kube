@@ -81,7 +81,9 @@ Each context shows its auth method, probe status, and a login button. Login reus
 
 ### Cluster read/write mode
 
-Each cluster can be set to **read-write** (the default) or **read-only** via a dropdown in cluster management (the choice persists in `dsh-kube-state.json`). In read-only mode the **Actions column disappears** from every resource list, the detail drawer's **Edit** button is hidden, and the agent's **write tools** (`kube_apply`, `kube_scale`, `kube_rollout`, `kube_delete`) refuse to run with a clear error; reads and login still work, and the panel shows a yellow "read-only" badge.
+Each cluster can be set to **read-write** (the default) or **read-only** via a dropdown in cluster management (the choice persists in `dsh-kube-state.json`). In read-only mode the **Actions column disappears** from every resource list, the detail drawer's **Edit** button is hidden, and the agent's **write tools** (`kube_apply`, `kube_scale`, `kube_rollout`, `kube_delete`) refuse to run with a clear error; reads and login still work.
+
+In the resource-browsing session page the cluster selector is a **searchable combobox** (open it and type to filter clusters; ↑/↓ to move, Enter to pick, Esc to close), next to it a **read-write / read-only dropdown** — this is a **session-only temporary override**, distinct from the global setting: the change lives in memory only (it is not written to `dsh-kube-state.json`), takes effect immediately (Actions column hidden/restored, Edit button hidden/shown), and **drops on a page refresh or a dsh restart**, reverting to the persisted global setting; switching away and back within the same session keeps the override. The global safety boundary is unchanged: the backend write tools always judge by the persisted setting, so a session-page readwrite override cannot bypass them.
 
 ---
 

@@ -88,6 +88,7 @@ window.__ModuleLoader__.load({
       'mode.readwrite': '读写',
       'mode.readonly': '只读',
       'mode.hint': '读写：可执行所有操作；只读：隐藏操作列、禁止编辑 YAML 与执行写操作工具。',
+      'mode.sessionHint': '会话内临时生效，不持久化；刷新页面或重启 dsh 后恢复为全局设置。',
       'cluster.overwriteNotice': '名称相同会覆盖现有集群的配置。',
       'ctx.label': '集群',
       'ctx.empty': '还没有可用集群',
@@ -342,6 +343,7 @@ window.__ModuleLoader__.load({
       'mode.readwrite': 'Read-Write',
       'mode.readonly': 'Read-Only',
       'mode.hint': 'Read-write: all operations allowed. Read-only: the ops column is hidden, YAML editing and write tools are refused.',
+      'mode.sessionHint': 'Session-only override, not persisted: a page refresh or a dsh restart restores the global setting.',
       'cluster.overwriteNotice': 'Saving with the same name overwrites the existing cluster config.',
       'ctx.label': 'Cluster',
       'ctx.empty': 'No cluster yet',
@@ -815,6 +817,16 @@ window.__ModuleLoader__.load({
     const OPEN_RULES_EVENT = 'dsh-kube:open-rules'
     function emitOpenRules(detail) {
       try { window.dispatchEvent(new CustomEvent(OPEN_RULES_EVENT, { detail })) } catch {}
+    }
+    // Read/write mode can be overridden per cluster *in the session* without
+    // touching the persisted setting. The conversation view writes this map and
+    // emits MODE_EVENT; a page refresh or dsh restart naturally clears the module
+    // and the persisted mode (dsh-kube-state.json) is read again. DetailTab sits
+    // in another React root, so it syncs through the same event.
+    const MODE_EVENT = 'dsh-kube:session-mode'
+    const sessionModeOverrides = {} // cluster name -> true (readonly) | false (readwrite); absent = use persisted
+    function emitSessionMode(detail) {
+      try { window.dispatchEvent(new CustomEvent(MODE_EVENT, { detail })) } catch {}
     }
 
     function authLabel(t, auth) {
@@ -1717,14 +1729,28 @@ window.__ModuleLoader__.load({
       const [readOnly, setReadOnly] = useState(false)
 
       // A read-only cluster (user-set mode) forbids YAML editing; the backend
-      // refuses applyYaml too, this is the UI-side mirror.
+      // refuses applyYaml too, this is the UI-side mirror. A session-page
+      // override (sessionModeOverrides, set without persisting) wins over the
+      // persisted mode while it exists; a refresh/restart drops the override
+      // and this falls back to the persisted value.
       useEffect(() => {
         let alive = true
-        if (!cluster) { setReadOnly(false); return () => {} }
-        call('mode', { cluster }).then((result) => {
-          if (alive && result && result.ok) setReadOnly(result.readOnly === true)
-        }).catch(() => {})
-        return () => { alive = false }
+        const sync = () => {
+          if (!cluster) { setReadOnly(false); return }
+          if (Object.prototype.hasOwnProperty.call(sessionModeOverrides, cluster)) {
+            setReadOnly(sessionModeOverrides[cluster] === true)
+            return
+          }
+          call('mode', { cluster }).then((result) => {
+            if (alive && result && result.ok) setReadOnly(result.readOnly === true)
+          }).catch(() => {})
+        }
+        sync()
+        const onMode = (event) => {
+          if (event && event.detail && event.detail.cluster === cluster) sync()
+        }
+        window.addEventListener(MODE_EVENT, onMode)
+        return () => { alive = false; window.removeEventListener(MODE_EVENT, onMode) }
       }, [cluster])
 
       const reload = useCallback(async () => {
@@ -2788,6 +2814,10 @@ window.__ModuleLoader__.load({
       // Generic list column sort (name / namespace / age) for every resource
       // type that is neither pods nor nodes; dir: 1 asc | -1 desc, or null.
       const [genericSort, setGenericSort] = useState(null)
+      // Session-only read/write override tick: bump to re-render after the
+      // session-page mode select writes sessionModeOverrides (a plain module
+      // map that React cannot observe on its own).
+      const [modeTick, setModeTick] = useState(0)
       // Pod rows expanded to show their containers. Key = "ns/name", value =
       // { loading, containers, initContainers, error }. Containers are fetched
       // lazily on first expand and kept while the row stays expanded.
@@ -3347,8 +3377,14 @@ window.__ModuleLoader__.load({
       // 状态 column is not shown for ingresses (its table exposes class/hosts).
       const showStatusColumn = loggableBase !== 'ingresses'
       // Read-only clusters (user-set mode) hide the ops column entirely: the
-      // backend also refuses every write on these clusters.
-      const readOnly = (clusters.find((entry) => entry.name === selected) || {}).readOnly === true
+      // backend also refuses every write on these clusters. A session-page
+      // override (sessionModeOverrides, not persisted) wins over the persisted
+      // mode while set; a refresh/restart drops it and the persisted value is
+      // read again. modeTick only forces a re-render on override changes.
+      const persistedReadOnly = (clusters.find((entry) => entry.name === selected) || {}).readOnly === true
+      const hasSessionMode = Object.prototype.hasOwnProperty.call(sessionModeOverrides, selected)
+      const readOnly = hasSessionMode ? sessionModeOverrides[selected] === true : persistedReadOnly
+      void modeTick
       // Every real resource gets an 操作 column (at least 删除); only the RBAC
       // user/group pseudo-rows offer no actions, and read-only clusters hide it.
       const showOpsColumn = opsFor(loggableBase).length > 0 && !readOnly
@@ -3736,7 +3772,6 @@ window.__ModuleLoader__.load({
         currentClusterBadge = h('span', { className: badgeClass(selectedState?.state) }, stateLabel(t, selectedState?.state))
       }
       const infoBadges = []
-      if (readOnly) infoBadges.push(h('span', { className: 'dk-badge count', key: 'ro', title: t('mode.hint') }, t('mode.readonly')))
       if (clusterInfo?.version) infoBadges.push(h('span', { className: 'dk-badge info', key: 'v' }, clusterInfo.version))
       if (clusterInfo?.user) infoBadges.push(h('span', { className: 'dk-badge info', key: 'u' }, clusterInfo.user))
       const defaultNs = selectedCluster?.namespace || namespaces[0] || 'default'
@@ -3763,10 +3798,27 @@ window.__ModuleLoader__.load({
 
       const kindsBar = h('div', { className: 'dk-bar' },
         h('span', { className: 'dk-field' }, t('ctx.label')),
+        h(KindPicker, {
+          t,
+          value: selected,
+          options: clusters.map((entry) => ({ id: entry.name, label: entry.name })),
+          onChange: switchTo,
+        }),
         h('select', {
-          className: 'dk-select', value: selected,
-          onChange: (event) => switchTo(event.target.value),
-        }, clusters.map((entry) => h('option', { key: entry.name, value: entry.name }, entry.name))),
+          className: 'dk-select mode' + (readOnly ? ' ro' : ''),
+          title: t('mode.sessionHint'),
+          disabled: !selected,
+          value: readOnly ? 'readonly' : 'readwrite',
+          onChange: (event) => {
+            const next = event.target.value === 'readonly'
+            sessionModeOverrides[selected] = next
+            emitSessionMode({ cluster: selected })
+            setModeTick((n) => n + 1)
+          },
+        },
+          h('option', { key: 'rw', value: 'readwrite' }, t('mode.readwrite')),
+          h('option', { key: 'ro', value: 'readonly' }, t('mode.readonly')),
+        ),
 
         !kindIsScoped
           ? h(React.Fragment, null,
