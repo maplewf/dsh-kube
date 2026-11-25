@@ -45,11 +45,11 @@ dsh-kube/
 
 ### 资源浏览
 
-支持按类型列出并过滤：Pods、Deployments、StatefulSets、DaemonSets、Jobs、CronJobs、HPAs、VPAs、Services、Ingress、ConfigMaps、Secrets、PVC、Events、Nodes、Namespaces、ServiceAccounts、Roles、RoleBindings、ClusterRoles、ClusterRoleBindings、Users/Groups、CRDs。资源类型是一个**可搜索的组合框**（中文名或 kind 都能搜，↑/↓ 选择、Enter 确认、Esc 关闭）。点一行在右侧抽屉看 YAML、Describe、Pod 日志。
+支持按类型列出并过滤：Pods、Deployments、StatefulSets、DaemonSets、Jobs、CronJobs、HPAs、VPAs、Services、Ingress、ConfigMaps、Secrets、PVC、Events、Nodes、Namespaces、ServiceAccounts、Roles、RoleBindings、ClusterRoles、ClusterRoleBindings、Users/Groups、CRDs。资源类型是一个**可搜索的组合框**（中文名或 kind 都能搜，↑/↓ 选择、Enter 确认、Esc 关闭）。点一行在右侧抽屉看 YAML、Describe、Pod 日志。**Service** 列表展示真实的**类型**列，并带一列 **Pod**，点击按该 Service 的 `spec.selector` 过滤出对应 Pod（无 selector 的 Service 该列返回空）。
 
 ### CRD
 
-资源类型下拉只列内置类型；`CRDs` 项展示集群已安装的 CustomResourceDefinition（Kind/Group/Scope/版本）。点击某行的 Kind 即进入该类型实例列表，顶部横幅以黄底 badge 提示当前显示的 group/kind，可一键返回。实例按 CRD 的 `additionalPrinterColumns` 展示；**大列表走 `custom-columns` 投影**（24MB 的 JSON 实例列表可缩到 ~70KB），不会触到输出上限；若该 CRD 没有 printer 列或 kubectl 拒绝表达式，会自动回退完整 JSON 路径。
+资源类型下拉把 `CRDs` 排在第一位；`CRDs` 项展示集群已安装的 CustomResourceDefinition（Kind/Group/Scope/版本）。点击某行的 Kind 即进入该类型实例列表，顶部横幅以黄底 badge 提示当前显示的 group/kind，可一键返回。实例表**固定显示 名称 / 命名空间（集群级则省略）/ 存在时长**三列，再按该 CRD 的 `additionalPrinterColumns` 把其余字段**动态展开成列**（键作表头、值作单元格，支持排序），不再挤进一个「其它」列。**大列表走 `custom-columns` 投影**（24MB 的 JSON 实例列表可缩到 ~70KB），不会触到输出上限；若该 CRD 没有 printer 列或 kubectl 拒绝表达式，会自动回退完整 JSON 路径。
 
 ### 容器终端
 
@@ -69,7 +69,7 @@ dsh-kube/
 
 ### 排序与过滤
 
-**所有**资源类型都支持按**名称/存在时长**排序（有命名空间列时也支持命名空间）：点表头循环 升序 → 降序 → 取消。**Pod 列表**额外支持命名空间、状态、Pod IP 排序，并可对**状态**与**所在节点**做多选过滤；**节点列表**支持 CPU/内存/Pod 数/架构/类型/区域/存在时长排序，并可对**架构/类型/区域**做多选过滤。过滤入口是表头里的**漏斗图标**（显示已选数量，不占行高），点开是可搜索的复选框面板；排序用的是底层真实数值（存在时长能解析 kubectl 的 `3y323d` 这类人类文本，所以即使显示值是文字也能正确排序）。
+**所有**资源类型都支持按**名称/存在时长**排序（有命名空间列时也支持命名空间）：点表头循环 升序 → 降序 → 取消。列表顶部有一个**全局过滤框**，可匹配**任意列**内容（含 `/正则/`、`* ?` 通配符、大小写不敏感的子串）。**Pod 列表**额外支持命名空间、状态、Pod IP 排序，并可对**状态**与**所在节点**做多选过滤；**节点列表**支持 CPU/内存/Pod 数/架构/类型/区域/存在时长排序，并可对**架构/类型/区域**做多选过滤；**Service** 的**类型**列、**CRD** 的 **Group/Scope** 列同样支持多选过滤。过滤入口是表头里的**漏斗图标**（显示已选数量，不占行高），点开是可搜索的复选框面板；排序用的是底层真实数值（存在时长能解析 kubectl 的 `3y323d` 这类人类文本，所以即使显示值是文字也能正确排序）。列表**表头及上方控件固定**，只滚动表格内容。
 
 ### RBAC 与规则矩阵
 
@@ -84,6 +84,10 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 集群管理里每个集群可用下拉框设置**读写**（默认）或**只读**（选择持久化到 `dsh-kube-state.json`）。只读模式下：所有资源列表的**操作列消失**、详情抽屉的**编辑按钮隐藏**、智能体**写工具**（`kube_apply`/`kube_scale`/`kube_rollout`/`kube_delete`）拒绝执行并返回明确错误；读操作与登录不受影响。
 
 会话页（资源浏览）里集群选择器是**可搜索组合框**（点开后输入关键字过滤集群，↑/↓ 选择、Enter 确认、Esc 关闭），旁边并排一个**读写 / 只读下拉框**——这是**会话内临时覆盖**，与全局设置不同：改动只写进内存（不写 `dsh-kube-state.json`），立刻生效（操作列隐藏/恢复、编辑按钮消失/出现），**页面刷新或 dsh 重启后临时覆盖被丢弃**，重新读取全局持久化设置；同一会话内切走再切回仍保留。全局安全边界不变：后端写工具始终按持久化设置判定，会话页临时改为读写不会绕过它。
+
+### 资源缓存
+
+全局视图拆成两个 tab：**集群配置**（管理集群、读写模式）与 **资源缓存**。资源缓存 tab 为**每种支持资源类型**列出其列表缓存时长（单位**秒**），**0 = 关闭该类型缓存**，默认仅 **CRD=3600s**、其余全部关闭。改动点「保存」后持久化到 `dsh-kube-state.json`，下次刷新生效。缓存按 `集群 × 类型 × 命名空间 × 全命名空间 × 选择器` 键控；**手动刷新**（↻ 按钮、自动刷新 tick、切换类型/集群/命名空间）会绕过缓存直取集群，只有普通返回（如切回 CRDs）才命中缓存；任何**写操作**（apply / 删除 / 工作负载操作 / 节点操作）成功后自动清除该集群缓存。CRD 元数据索引本身的缓存独立于此，也是 3600s。
 
 ---
 
@@ -122,7 +126,7 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 
 - `~/.kube/dsh/configs/*.yaml`：各集群的 kubeconfig 副本（只能由插件 UI 或智能体写入）；
 - `~/.kube/dsh/config`：把 `configs/` 用 `kubectl config view --flatten` 合并成的当前配置（kubectl 实际读取）；
-- `~/.kube/dsh/dsh-kube-state.json`：当前选中集群。
+- `~/.kube/dsh/dsh-kube-state.json`：当前选中集群、各集群读写模式，以及**各资源类型的缓存时长**。
 
 所有 kubectl 调用都带 `--kubeconfig`（每次读对应集群文件），token/oidc-login 缓存落在 DSH 主目录内。
 
@@ -132,7 +136,7 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 
 - **破坏性操作**（节点封锁/解封/排空、删除、扩缩、回滚）会影响调度与运行负载。排空会删除 `emptyDir` 数据。请在非生产集群上先演练。
 - **`dsh web` 重启**时 systemd 会同 cgroup 一起杀掉进程，正在跑的 kubectl 被信号终止（退出码 -1）。这只代表“请求被打断”，不是集群问题；面板会静默重试而非报错。
-- 资源不缓存，每次读取都是实时 kubectl 调用（可能较慢，取决于集群规模）。
+- 资源列表按「资源缓存」tab 里每类型的时长做缓存（默认仅 CRD=3600s、其余实时），**手动刷新会绕过缓存**；CRD 元数据索引缓存 1 小时。
 - 依赖本机 kubectl 与 kubeconfig 的 `exec` 凭据插件。
 - 不读取系统默认 `~/.kube/config`；集群配置只能由你在面板中粘贴。
 

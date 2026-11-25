@@ -45,11 +45,11 @@ dsh-kube/
 
 ### Resource browsing
 
-List/filter across Pods, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, HPAs, VPAs, Services, Ingress, ConfigMaps, Secrets, PVC, Events, Nodes, Namespaces, ServiceAccounts, Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, Users/Groups, and CRDs. The resource-type box is **searchable** (by Chinese label or kind; ↑/↓ to select, Enter to confirm, Esc to close). Clicking a row opens a right drawer with YAML / Describe / Pod logs.
+Support by-type listing and filtering across Pods, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, HPAs, VPAs, Services, Ingress, ConfigMaps, Secrets, PVC, Events, Nodes, Namespaces, ServiceAccounts, Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, Users/Groups, and CRDs. The resource-type box is **searchable** (by Chinese label or kind; ↑/↓ to select, Enter to confirm, Esc to close). Clicking a row opens a right drawer with YAML / Describe / Pod logs. The **Services** list shows a real **Type** column and a **Pod** column that filters pods by the Service's `spec.selector` (selector-less Services return empty).
 
 ### CRD
 
-The dropdown lists only built-in types; the `CRDs` entry shows installed CustomResourceDefinitions. Clicking a Kind drills into its instances (rendered with `additionalPrinterColumns`), with a banner showing the current group/kind and a one-click back. Large CRD instance lists are fetched as a `custom-columns` projection (a 24 MB JSON list drops to ~70 KB), so they stay well under the output limit; if a CRD has no printer columns (or kubectl rejects the expression) the plugin transparently falls back to the full JSON path.
+The dropdown lists only built-in types; `CRDs` is the **first** entry. The `CRDs` entry shows installed CustomResourceDefinitions. Clicking a Kind drills into its instances, with a banner showing the current group/kind and a one-click back. The instance table always shows **name / namespace (omitted for cluster-scoped) / age** as fixed columns, and expands the CRD's `additionalPrinterColumns` into **dynamic columns** (each key becomes a header, the value a cell, sortable) instead of cramming them into one "other" column. Large CRD instance lists are fetched as a `custom-columns` projection (a 24 MB JSON list drops to ~70 KB), so they stay well under the output limit; if a CRD has no printer columns (or kubectl rejects the expression) the plugin transparently falls back to the full JSON path.
 
 ### In-container terminal
 
@@ -69,7 +69,7 @@ The Nodes list replaces the old spec column with **CPU** and **Memory** as `requ
 
 ### Sorting & filtering
 
-**All** resource kinds support sorting on **name / age** (and **namespace** when the column is shown): click a header to cycle ascending → descending → off. **Pods** additionally sort on namespace, status and IP, and let you multi-select filters on **status** and **node**; **Nodes** sort on CPU / memory / pod count / arch / type / zone / age with multi-select filters on **arch / type / zone**. Filters are a funnel icon in the header (shows the selected count, stays out of the row height) opening a searchable checkbox panel; sorting uses the real numbers underneath (age parses kubectl's `3y323d`-style text, so it orders correctly even though the displayed value is human-readable).
+**All** resource kinds support sorting on **name / age** (and **namespace** when the column is shown): click a header to cycle ascending → descending → off. A **global filter box** at the top of the list matches **any column** (supports `/regex/`, `* ?` wildcards, and case-insensitive substrings). **Pods** additionally sort on namespace, status and IP, and let you multi-select filters on **status** and **node**; **Nodes** sort on CPU / memory / pod count / arch / type / zone / age with multi-select filters on **arch / type / zone**; the **Services** **Type** column and the **CRDs** **Group / Scope** columns are multi-select filterable too. Filters are a funnel icon in the header (shows the selected count, stays out of the row height) opening a searchable checkbox panel; sorting uses the real numbers underneath (age parses kubectl's `3y323d`-style text, so it orders correctly even though the displayed value is human-readable). The **header and the controls above it stay fixed** while only the table content scrolls.
 
 ### RBAC & rules matrix
 
@@ -84,6 +84,10 @@ Each context shows its auth method, probe status, and a login button. Login reus
 Each cluster can be set to **read-write** (the default) or **read-only** via a dropdown in cluster management (the choice persists in `dsh-kube-state.json`). In read-only mode the **Actions column disappears** from every resource list, the detail drawer's **Edit** button is hidden, and the agent's **write tools** (`kube_apply`, `kube_scale`, `kube_rollout`, `kube_delete`) refuse to run with a clear error; reads and login still work.
 
 In the resource-browsing session page the cluster selector is a **searchable combobox** (open it and type to filter clusters; ↑/↓ to move, Enter to pick, Esc to close), next to it a **read-write / read-only dropdown** — this is a **session-only temporary override**, distinct from the global setting: the change lives in memory only (it is not written to `dsh-kube-state.json`), takes effect immediately (Actions column hidden/restored, Edit button hidden/shown), and **drops on a page refresh or a dsh restart**, reverting to the persisted global setting; switching away and back within the same session keeps the override. The global safety boundary is unchanged: the backend write tools always judge by the persisted setting, so a session-page readwrite override cannot bypass them.
+
+### Resource cache
+
+The global view now has two tabs: **Cluster config** (manage clusters and read/write mode) and **Resource cache**. The Resource cache tab lists the list-cache duration (in **seconds**) for **every supported resource type**; **0 = caching off** for that type, and by default only **CRD = 3600s**, all others off. Saving persists to `dsh-kube-state.json` and takes effect on the next refresh. The cache is keyed by `cluster × type × namespace × all-namespaces × selector`; **manual refreshes** (the ↻ button, auto-refresh ticks, or switching type/cluster/namespace) bypass the cache and hit the cluster, while plain returns (e.g. coming back to CRDs) use the cache; any **write operation** (apply / delete / workload action / node action) clears that cluster's cache on success. The CRD metadata-index cache itself is separate and also 3600s.
 
 ---
 
@@ -120,7 +124,7 @@ Config lives under the DSH home directory (not your real home):
 
 - `~/.kube/dsh/configs/*.yaml` — per-cluster kubeconfig copies (written only via the plugin UI or agent);
 - `~/.kube/dsh/config` — the flattened current config kubectl actually reads;
-- `~/.kube/dsh/dsh-kube-state.json` — the currently selected cluster.
+- `~/.kube/dsh/dsh-kube-state.json` — the selected cluster, per-cluster read/write mode, and the **cache duration per resource type**.
 
 Every kubectl call passes `--kubeconfig`; token/oidc-login caches land in the DSH home.
 
@@ -130,7 +134,7 @@ Every kubectl call passes `--kubeconfig`; token/oidc-login caches land in the DS
 
 - **Destructive operations** (node cordon/uncordon/drain, delete, scale, rollback) affect scheduling and running workloads; drain deletes `emptyDir` data. Test on a non-production cluster first.
 - When **`dsh web` restarts**, systemd kills the whole cgroup, so an in-flight kubectl is signal-terminated (exit code −1). That only means the request was interrupted, not a cluster problem; the panel retries silently instead of erroring.
-- Resources are not cached — every read is a live kubectl call (can be slow on large clusters).
+- Resource lists are cached per type per the durations set in the **Resource cache** tab (by default only CRD = 3600s, everything else live), and **manual refreshes bypass the cache**; the CRD metadata-index cache is 1 hour.
 - Requires a local kubectl and the kubeconfig `exec` credential providers.
 - Does not read the system `~/.kube/config`; cluster configs are pasted by you in the panel.
 

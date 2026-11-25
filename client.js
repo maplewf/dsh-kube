@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
     ])
 
     const KINDS = [
+      { id: 'customresourcedefinitions', label: 'CRDs' },
       { id: 'pods', label: 'Pods' },
       { id: 'deployments.apps', label: 'Deployments' },
       { id: 'statefulsets.apps', label: 'StatefulSets' },
@@ -49,8 +50,16 @@ window.__ModuleLoader__.load({
       { id: 'clusterrolebindings.rbac.authorization.k8s.io', label: 'ClusterRoleBindings' },
       { id: 'rbacusers', label: 'Users' },
       { id: 'rbacgroups', label: 'Groups' },
-      { id: 'customresourcedefinitions', label: 'CRDs' },
     ]
+
+    // Friendly label per base kind for the Resource Cache tab. Built from KINDS
+    // (base = the kind id before the group), so it stays in sync with the
+    // resource-type picker and matches the backend SUPPORTED_RESOURCE_TYPES.
+    const CACHE_TYPE_LABELS = {}
+    for (const kind of KINDS) {
+      const base = String(kind.id).split('.')[0]
+      CACHE_TYPE_LABELS[base] = kind.label
+    }
 
     // Which 操作 entries a workload row offers. A DaemonSet has no replica count
     // (one pod per node), so `scale` is not offered for it, and the backend
@@ -90,6 +99,15 @@ window.__ModuleLoader__.load({
       'mode.hint': '读写：可执行所有操作；只读：隐藏操作列、禁止编辑 YAML 与执行写操作工具。',
       'mode.sessionHint': '会话内临时生效，不持久化；刷新页面或重启 dsh 后恢复为全局设置。',
       'cluster.overwriteNotice': '名称相同会覆盖现有集群的配置。',
+      'cache.tab.clusters': '集群配置',
+      'cache.tab.cache': '资源缓存',
+      'cache.title': '资源缓存',
+      'cache.hint': '为每种资源类型设置列表缓存的时长（单位：秒）。设置为 0 表示关闭该资源的缓存。',
+      'cache.unit': '秒',
+      'cache.save': '保存',
+      'cache.saved': '缓存配置已保存',
+      'cache.loading': '加载中…',
+      'cache.savedHint': '修改会在下次刷新资源列表时生效。',
       'ctx.label': '集群',
       'ctx.empty': '还没有可用集群',
       'ns.label': '命名空间',
@@ -100,7 +118,7 @@ window.__ModuleLoader__.load({
       'kind.nomatch': '没有匹配的资源类型',
       'refresh': '刷新',
       'auto.refresh': '自动刷新',
-      'filter.placeholder': '按名称过滤…',
+      'filter.placeholder': '过滤：任意列，支持 * ? 通配符与 /正则/…',
       'filter.col': '过滤…',
       'filter.all': '全部',
       'filter.selected': '项',
@@ -265,6 +283,10 @@ window.__ModuleLoader__.load({
       'col.arch': '架构',
       'detail.yaml': 'YAML',
       'detail.describe': 'Describe',
+      'detail.search.placeholder': '搜索：关键字，或 * ? 通配符，或 /正则/flags',
+      'detail.search.hint': '支持 * ? 通配符与 /pattern/i 正则',
+      'detail.search.prev': '上一个匹配',
+      'detail.search.next': '下一个匹配',
       'detail.logs': 'Log',
       'logs.title': '日志',
       'logs.connecting': '连接中…',
@@ -345,6 +367,15 @@ window.__ModuleLoader__.load({
       'mode.hint': 'Read-write: all operations allowed. Read-only: the ops column is hidden, YAML editing and write tools are refused.',
       'mode.sessionHint': 'Session-only override, not persisted: a page refresh or a dsh restart restores the global setting.',
       'cluster.overwriteNotice': 'Saving with the same name overwrites the existing cluster config.',
+      'cache.tab.clusters': 'Cluster config',
+      'cache.tab.cache': 'Resource cache',
+      'cache.title': 'Resource cache',
+      'cache.hint': 'Set a list-cache duration (in seconds) for each resource type. 0 disables caching for that resource.',
+      'cache.unit': 's',
+      'cache.save': 'Save',
+      'cache.saved': 'Cache config saved',
+      'cache.loading': 'Loading…',
+      'cache.savedHint': 'Changes take effect the next time a resource list is refreshed.',
       'ctx.label': 'Cluster',
       'ctx.empty': 'No cluster yet',
       'ns.label': 'Namespace',
@@ -355,7 +386,7 @@ window.__ModuleLoader__.load({
       'kind.nomatch': 'No matching kind',
       'refresh': 'Refresh',
       'auto.refresh': 'Auto-refresh',
-      'filter.placeholder': 'Filter by name…',
+      'filter.placeholder': 'Filter: any column, * ? wildcards or /regex/…',
       'filter.col': 'Filter…',
       'filter.all': 'All',
       'filter.selected': 'selected',
@@ -513,6 +544,10 @@ window.__ModuleLoader__.load({
       'col.vpaprovided': 'Provided',
       'detail.yaml': 'YAML',
       'detail.describe': 'Describe',
+      'detail.search.placeholder': 'Search: text, * ? wildcards, or /regex/flags',
+      'detail.search.hint': 'Supports * ? wildcards and /pattern/i regex',
+      'detail.search.prev': 'Previous match',
+      'detail.search.next': 'Next match',
       'detail.logs': 'Log',
       'logs.title': 'Logs',
       'logs.connecting': 'Connecting…',
@@ -627,6 +662,7 @@ window.__ModuleLoader__.load({
 .dk-select:focus,.dk-input:focus{border-color:var(--dsw-alias-brand-primary)}
 .dk-input.search{width:220px}
 .dk-input.grow{width:100%}
+.dk-cache-field{display:inline-flex;align-items:center;gap:2px;flex:none}
 .dk-multi{position:relative}
 .dk-multi-btn{height:28px;min-width:120px;max-width:300px;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;padding:0 8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;overflow:hidden}
 .dk-multi-btn .dk-multi-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left}
@@ -665,7 +701,7 @@ window.__ModuleLoader__.load({
 .dk-pf-row:hover{border-color:var(--dsw-alias-brand-primary)}
 .dk-pf-row.on{border-color:rgba(22,163,74,.6);background:rgba(22,163,74,.1);color:#16a34a}
 .dk-pf-row.off{opacity:.5;cursor:not-allowed}
-.dk-table{width:100%;border-collapse:collapse}
+.dk-table{width:100%;border-collapse:separate;border-spacing:0}
 .dk-table th{text-align:left;font-weight:600;color:#fff;font-size:12px;padding:6px 10px;border-bottom:1px solid #000;position:sticky;top:0;background:#000;z-index:1}
 .dk-th-sort{cursor:pointer;user-select:none}
 .dk-th-sort:hover .dk-th-label{color:#ffd60a}
@@ -706,13 +742,14 @@ window.__ModuleLoader__.load({
 .dk-error .dk-hint{color:var(--dsw-alias-label-secondary);font-size:12px;flex-basis:100%}
 .dk-stale{margin:0 0 12px;padding:6px 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);font-size:12px}
 .dk-card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:14px}
-.dk-view{display:flex;flex-direction:column;gap:12px;height:100%;min-height:0;overflow:auto;padding:18px 20px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:14px;font-family:var(--dsw-font-family)}
-.dk-view-card{width:100%;max-width:none;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-specific-sidebar-fill);padding:16px;display:flex;flex-direction:column;gap:12px}
+.dk-view{display:flex;flex-direction:column;gap:12px;height:calc(var(--dsh-conversation-viewport-height,100vh) - var(--dsh-composer-height,0px));min-height:0;overflow:hidden;box-sizing:border-box;padding:18px 20px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:14px;font-family:var(--dsw-font-family)}
+.dk-view-card{width:100%;max-width:none;flex:1;min-height:0;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-specific-sidebar-fill);padding:16px;display:flex;flex-direction:column;gap:12px}
 .dk-view-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .dk-view-title{font-weight:500}
 .dk-empty{padding:36px 16px;text-align:center;color:var(--dsw-alias-label-secondary);border:1px dashed var(--dsw-alias-border-l2);border-radius:10px}
-.dk-split{display:flex;gap:14px;align-items:flex-start;min-height:0}
+.dk-split{flex:1;min-height:0;overflow:auto;display:flex;gap:14px;align-items:flex-start}
 .dk-main{flex:1;min-width:0}
+.dk-view-card .dk-view-head,.dk-view-card .dk-bar,.dk-view-card .dk-stale,.dk-view-card .dk-error{flex:none}
 .dk-drawer-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #333;background:#000;color:#fff}
 .dk-drawer-body{flex:1;min-height:0;overflow:auto;padding:10px 12px;background:#000;color:#fff}
 .dk-detail-tab{display:flex;flex-direction:column;height:100%;min-height:0;background:#000;color:#fff;font-size:14px;font-family:var(--dsw-font-family)}
@@ -746,6 +783,18 @@ window.__ModuleLoader__.load({
 .dk-detail-tab .dk-yaml-layer{position:absolute;inset:0;margin:0;padding:0 12px;overflow:hidden;white-space:pre-wrap;word-break:break-word;font:13px/1.55 var(--ds-font-family-code);color:#e5e7eb;tab-size:2;pointer-events:none}
 .dk-detail-tab .dk-yaml-input{position:absolute;inset:0;width:100%;height:100%;box-sizing:border-box;margin:0;padding:0 12px;border:0;background:transparent;color:transparent;caret-color:#4ade80;font:13px/1.55 var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;overflow:auto;resize:none;tab-size:2;outline:none}
 .dk-detail-tab .dk-yaml-input::selection{background:rgba(74,222,128,.25)}
+.dk-detail-tab .dk-yaml-search{position:absolute;inset:0;margin:0;padding:0 12px;overflow:hidden;white-space:pre-wrap;word-break:break-word;font:13px/1.55 var(--ds-font-family-code);color:transparent;tab-size:2;pointer-events:none}
+.dk-detail-tab .dk-yaml-search .dk-logs-hit{background:#ffd60a;color:#111;border-radius:2px}
+.dk-detail-tab .dk-yaml-search .dk-logs-hit.dk-hit-cur{background:#ffd60a;color:#111;outline:1px solid #fff}
+.dk-detail-tab .dk-detail-search{display:flex;align-items:center;gap:6px;margin-bottom:6px;background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:5px 6px}
+.dk-detail-tab .dk-search-input{flex:1;min-width:0;height:24px;background:#111;color:#fff;border:1px solid #333;border-radius:5px;padding:0 8px;font-size:12px}
+.dk-detail-tab .dk-search-input::placeholder{color:#6b7280}
+.dk-detail-tab .dk-search-input:focus{outline:none;border-color:#4b5563}
+.dk-detail-tab .dk-search-input.invalid{border-color:#ef4444}
+.dk-detail-tab .dk-search-count{font:12px var(--ds-font-family-code);color:#fff;min-width:36px;text-align:center;white-space:nowrap}
+.dk-detail-tab .dk-search-nav{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;color:#9ca3af;border:0;background:transparent;border-radius:4px;cursor:pointer}
+.dk-detail-tab .dk-search-nav:hover{color:#fff;background:#232a36}
+.dk-detail-tab .dk-search-nav:disabled{color:#4b5563;cursor:default;background:transparent}
 .dk-detail-tab .dk-edit-hint{font-size:12px;margin-bottom:6px}
 .dk-rules-body{flex:1;min-height:0;overflow:auto;padding:10px}
 .dk-rules-table{width:100%;border-collapse:collapse;font-size:12px}
@@ -1633,17 +1682,81 @@ window.__ModuleLoader__.load({
       return out.join('\n')
     }
 
+    // ---- search support for the YAML/describe view ----
+    // Same auto-detect scheme as the logs search (buildLogMatcher):
+    //   /pattern/flags -> regular expression (flags optional)
+    //   containing * or ? -> glob wildcard, * = any run, ? = one character
+    //   otherwise -> case-insensitive literal substring
+    // Returns { re } or { error }. Invalid patterns surface a message instead of
+    // silently matching nothing.
+    function buildYamlMatcher(query) {
+      const text = String(query || '')
+      if (!text) return null
+      const asRegex = /^\/(.+)\/([gimsuy]*)$/.exec(text)
+      if (asRegex) {
+        const flags = asRegex[2].includes('g') ? asRegex[2] : asRegex[2] + 'g'
+        try { return { re: new RegExp(asRegex[1], flags) } } catch (failure) { return { error: String(failure?.message || failure) } }
+      }
+      if (text.includes('*') || text.includes('?')) {
+        const glob = text.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')
+        try { return { re: new RegExp(glob, 'gi') } } catch (failure) { return { error: String(failure?.message || failure) } }
+      }
+      const literal = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return { re: new RegExp(literal, 'gi') }
+    }
+    // All non-overlapping match spans of `re` inside `text` (guards against
+    // zero-length matches so the loop cannot spin forever).
+    function findMatches(text, re) {
+      const out = []
+      if (!re) return out
+      const s = String(text ?? '')
+      re.lastIndex = 0
+      let m
+      let guard = 0
+      while ((m = re.exec(s))) {
+        if (guard++ > 500) break
+        if (m[0].length === 0) { re.lastIndex = m.index + 1; continue }
+        out.push({ start: m.index, end: m.index + m[0].length })
+        if (re.lastIndex === m.index) re.lastIndex++
+      }
+      return out
+    }
+    // HTML for the search-highlight layer: the whole body is escaped so it stays
+    // pixel-aligned with the syntax layer, matches are wrapped in the same
+    // `<mark class="dk-logs-hit">` used by the logs search, the active (current)
+    // match gets an extra `.cur` class.
+    function buildSearchHtml(text, matches, activeIdx) {
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      if (!matches.length) return ''
+      const s = String(text ?? '')
+      let out = ''
+      let last = 0
+      for (let i = 0; i < matches.length; i++) {
+        const m = matches[i]
+        out += esc(s.slice(last, m.start))
+        out += `<mark class="dk-logs-hit${i === activeIdx ? ' dk-hit-cur' : ''}">${esc(s.slice(m.start, m.end))}</mark>`
+        last = m.end
+      }
+      out += esc(s.slice(last))
+      return out
+    }
+
     // Read and edit share ONE surface: a syntax-highlighted layer with a
     // transparent textarea on top. Read-only is the same component with the
     // textarea in readOnly mode, so switching to edit changes nothing about the
     // typography, colours, wrapping or scroll position — only the caret appears.
     // A plain <textarea> can't carry syntax colours itself, and a second styled
     // view (what this replaces) made edit mode look like a different product.
-    function YamlView({ text, mode, readOnly, onChange, onCancel }) {
+    // A transparent search-highlight layer sits between the syntax layer and the
+    // textarea: matches get a yellow background while the syntax colours beneath
+    // still show through the (transparent) match text.
+    function YamlView({ text, mode, readOnly, onChange, onCancel, searchMatches = [], searchMatchIdx = -1 }) {
       const layerRef = useRef(null)
+      const searchRef = useRef(null)
       const inputRef = useRef(null)
       const body = String(text ?? '')
       const html = highlightSyntax(body, mode)
+      const searchHtml = buildSearchHtml(body, searchMatches, searchMatchIdx)
 
       // Keep the highlight layer glued to the textarea: same scroll offset and,
       // because a textarea's scrollbar steals width from its text box, the same
@@ -1651,11 +1764,17 @@ window.__ModuleLoader__.load({
       const sync = useCallback(() => {
         const input = inputRef.current
         const layer = layerRef.current
+        const search = searchRef.current
         if (!input || !layer) return
         const gutter = input.offsetWidth - input.clientWidth
         layer.style.paddingRight = `${12 + gutter}px`
         layer.scrollTop = input.scrollTop
         layer.scrollLeft = input.scrollLeft
+        if (search) {
+          search.style.paddingRight = `${12 + gutter}px`
+          search.scrollTop = input.scrollTop
+          search.scrollLeft = input.scrollLeft
+        }
       }, [])
 
       // Entering edit mode puts the caret in the text; leaving it hands focus back
@@ -1677,6 +1796,18 @@ window.__ModuleLoader__.load({
         return () => ro.disconnect()
       }, [sync, body])
 
+      // Bring the current match into view by aligning the textarea scroll so the
+      // match's highlight span (same layout in the search layer) lands mid-view.
+      useEffect(() => {
+        const input = inputRef.current
+        const search = searchRef.current
+        if (!input || !search || searchMatchIdx < 0) return
+        const el = search.querySelector('.dk-logs-hit.dk-hit-cur')
+        if (!el) return
+        input.scrollTop = Math.max(0, el.offsetTop - input.clientHeight / 2)
+        sync()
+      }, [searchMatchIdx, body, sync])
+
       return h('div', { className: 'dk-yaml-view' },
         h('pre', {
           className: 'dk-yaml-layer',
@@ -1684,6 +1815,12 @@ window.__ModuleLoader__.load({
           'aria-hidden': 'true',
           dangerouslySetInnerHTML: { __html: html },
         }),
+        searchHtml ? h('pre', {
+          className: 'dk-yaml-search',
+          ref: searchRef,
+          'aria-hidden': 'true',
+          dangerouslySetInnerHTML: { __html: searchHtml },
+        }) : null,
         h('textarea', {
           className: 'dk-yaml-input',
           ref: inputRef,
@@ -1727,6 +1864,8 @@ window.__ModuleLoader__.load({
       const [applyError, setApplyError] = useState(null)
       const [notice, setNotice] = useState(null)
       const [readOnly, setReadOnly] = useState(false)
+      const [search, setSearch] = useState('')
+      const [matchIdx, setMatchIdx] = useState(0)
 
       // A read-only cluster (user-set mode) forbids YAML editing; the backend
       // refuses applyYaml too, this is the UI-side mirror. A session-page
@@ -1849,6 +1988,47 @@ window.__ModuleLoader__.load({
       const tabs = [['yaml', t('detail.yaml')], ['describe', t('detail.describe')]]
       const canEdit = tab === 'yaml' && !pseudo && value !== null && !loading && !error && !readOnly
 
+      // Search over whatever is currently displayed (draft while editing, value
+      // otherwise). Auto-detects /regex/, wildcards, or literal like the logs
+      // search. Reset the active match to the first on every query change.
+      const displayText = editing ? draft : (value ?? '')
+      const searchMatcher = useMemo(() => buildYamlMatcher(search), [search])
+      const searchError = search && searchMatcher?.error ? searchMatcher.error : null
+      const searchMatches = useMemo(() => findMatches(displayText, searchMatcher?.re), [displayText, searchMatcher])
+      const activeIdx = searchMatches.length ? Math.min(matchIdx, searchMatches.length - 1) : -1
+      const goMatch = useCallback((dir) => {
+        setMatchIdx((cur) => {
+          if (!searchMatches.length) return 0
+          return (cur + dir + searchMatches.length) % searchMatches.length
+        })
+      }, [searchMatches.length])
+
+      const chevronSvg = (up) => h('svg', { width: 12, height: 12, viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+        up
+          ? h('path', { d: 'M8 11 3 6h10z', fill: 'currentColor' })
+          : h('path', { d: 'M8 5 13 10H3z', fill: 'currentColor' }),
+      )
+      const searchBar = h('div', { className: 'dk-detail-search' },
+        h('input', {
+          className: 'dk-input dk-search-input' + (searchError ? ' invalid' : ''),
+          type: 'text',
+          value: search,
+          placeholder: t('detail.search.placeholder'),
+          title: t('detail.search.hint'),
+          spellCheck: false,
+          onChange: (event) => { setSearch(event.target.value); setMatchIdx(0) },
+          onKeyDown: (event) => {
+            if (event.key === 'Enter') { event.preventDefault(); goMatch(1) }
+            else if (event.key === 'Escape') { setSearch(''); setMatchIdx(0) }
+          },
+        }),
+        searchError
+          ? h('span', { className: 'dk-badge error' }, searchError)
+          : h('span', { className: 'dk-search-count' }, searchMatches.length ? `${activeIdx + 1}/${searchMatches.length}` : '0/0'),
+        h('button', { className: 'dk-search-nav', onClick: () => goMatch(-1), disabled: !searchMatches.length, title: t('detail.search.prev') }, chevronSvg(true)),
+        h('button', { className: 'dk-search-nav', onClick: () => goMatch(1), disabled: !searchMatches.length, title: t('detail.search.next') }, chevronSvg(false)),
+      )
+
       return h('div', { className: 'dk-detail-tab' },
         h('div', { className: 'dk-drawer-head' },
           h('span', { className: 'dk-mono', style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, name || ''),
@@ -1869,6 +2049,7 @@ window.__ModuleLoader__.load({
           !loading && !error && (editing || value !== null)
             ? [
               editing && secret ? h('div', { key: 'hint', className: 'dk-muted dk-edit-hint' }, t('edit.secret')) : null,
+              searchBar,
               h(YamlView, {
                 key: 'view',
                 text: editing ? draft : value,
@@ -1876,6 +2057,8 @@ window.__ModuleLoader__.load({
                 readOnly: !editing,
                 onChange: editing ? setDraft : undefined,
                 onCancel: editing ? cancelEdit : undefined,
+                searchMatches,
+                searchMatchIdx: activeIdx,
               }),
             ]
             : null,
@@ -2590,8 +2773,100 @@ window.__ModuleLoader__.load({
 
     // --- sidebar panel: cluster configuration management -------------------
 
+    // Resource Cache tab: lets the user set a list-cache TTL (seconds) per
+    // resource type. 0 disables caching for that type. Values are loaded from
+    // the backend on mount and persisted via set-cache-config.
+    function CacheConfig({ t }) {
+      useStyles()
+      const [values, setValues] = useState(null)
+      const [error, setError] = useState(null)
+      const [notice, setNotice] = useState(null)
+      const [busy, setBusy] = useState(false)
+
+      const load = useCallback(async () => {
+        try {
+          const result = await call('cache-config')
+          if (!result.ok) { setError(result.error || t('state.error')); return }
+          setValues(result.cache || {})
+        } catch (failure) {
+          setError(String(failure?.message || failure))
+        }
+      }, [t])
+
+      useEffect(() => { load() }, [load])
+
+      const set = useCallback((base, raw) => {
+        setValues((prev) => {
+          const current = prev || {}
+          const n = Number(raw)
+          const next = { ...current }
+          if (Number.isFinite(n) && n >= 0) next[base] = String(Math.floor(n))
+          return next
+        })
+      }, [])
+
+      const save = useCallback(async () => {
+        setBusy(true)
+        setError(null)
+        setNotice(null)
+        const cache = {}
+        for (const base of Object.keys(values || {})) {
+          const n = Number(values[base])
+          if (Number.isFinite(n) && n >= 0) cache[base] = Math.floor(n)
+        }
+        try {
+          const result = await call('set-cache-config', { cache })
+          if (!result.ok) { setError(result.error || t('state.error')); return }
+          setValues(result.cache || {})
+          setNotice(t('cache.saved'))
+        } catch (failure) {
+          setError(String(failure?.message || failure))
+        } finally {
+          setBusy(false)
+        }
+      }, [values, t])
+
+      const keys = Object.keys(CACHE_TYPE_LABELS)
+
+      return h('div', { className: 'dk-body' },
+        h('div', { className: 'dk-muted', style: { margin: '12px 20px', lineHeight: 1.7 } }, t('cache.hint')),
+        h('div', { className: 'dk-card', style: { padding: 0 } },
+          keys.map((base) => h('div', { key: base, className: 'dk-row', style: { padding: '10px 14px' } },
+            h('div', { className: 'dk-row-main' },
+              h('div', { className: 'dk-row-name' }, CACHE_TYPE_LABELS[base] || base),
+              h('div', { className: 'dk-row-meta dk-mono' }, base),
+            ),
+            h('label', { className: 'dk-cache-field', title: t('cache.hint') },
+              h('input', {
+                className: 'dk-input',
+                type: 'number',
+                min: 0,
+                step: 1,
+                style: { width: 96, textAlign: 'right' },
+                value: values ? (values[base] ?? 0) : '',
+                placeholder: '0',
+                disabled: values == null,
+                onChange: (event) => set(base, event.target.value),
+              }),
+              h('span', { className: 'dk-muted', style: { flex: 'none', marginLeft: 6 } }, t('cache.unit')),
+            ),
+          )),
+        ),
+        h('div', { className: 'dk-row', style: { padding: '12px 20px' } },
+          h('button', {
+            className: 'dk-btn primary',
+            onClick: save,
+            disabled: busy || values == null,
+          }, busy ? t('edit.saving') : t('cache.save')),
+          notice ? h('span', { className: 'dk-muted', style: { marginLeft: 12 } }, notice) : null,
+        ),
+        error ? h('div', { className: 'dk-error', style: { margin: '0 20px 16px' } }, error) : null,
+      )
+    }
+
     function ClustersPanel({ t, onBack }) {
       useStyles()
+      const [tab, setTab] = useState('clusters') // 'clusters' | 'cache'
       const [boot, setBoot] = useState(null)
       const [clusters, setClusters] = useState([])
       const [notice, setNotice] = useState(null)
@@ -2660,18 +2935,31 @@ window.__ModuleLoader__.load({
       const header = h('div', { className: 'dk-head' },
         h('button', { className: 'dk-btn ghost', onClick: onBack, title: t('page.back') }, '←'),
         h('div', null,
-          h('h2', { className: 'dk-title' }, t('clusters.title')),
+          h('h2', { className: 'dk-title' }, t('panel.title')),
           h('div', { className: 'dk-sub' }, t('panel.subtitle')),
         ),
         h('div', { className: 'dk-spacer' }),
         boot
           ? h('span', { className: 'dk-badge' + (boot.kubectl ? ' plain' : ' err') }, boot.kubectl ? 'kubectl ✓' : t('msg.noKubectl'))
           : null,
-        h('button', { className: 'dk-btn primary', onClick: openAdd }, t('cluster.add')),
+        tab === 'clusters' ? h('button', { className: 'dk-btn primary', onClick: openAdd }, t('cluster.add')) : null,
+      )
+
+      const tabBar = h('div', { className: 'dk-tabs' },
+        h('button', {
+          className: 'dk-tab' + (tab === 'clusters' ? ' active' : ''),
+          onClick: () => setTab('clusters'),
+        }, t('cache.tab.clusters')),
+        h('button', {
+          className: 'dk-tab' + (tab === 'cache' ? ' active' : ''),
+          onClick: () => setTab('cache'),
+        }, t('cache.tab.cache')),
       )
 
       let body
-      if (clusters.length === 0) {
+      if (tab === 'cache') {
+        body = h(CacheConfig, { t })
+      } else if (clusters.length === 0) {
         body = h('div', { className: 'dk-empty' },
           h('div', { style: { marginBottom: 12 } }, t('cluster.empty')),
           h('button', { className: 'dk-btn primary', onClick: openAdd }, t('cluster.add')),
@@ -2702,8 +2990,9 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'dk-root' },
         header,
-        h('div', { className: 'dk-body' }, body),
-        notice ? h('div', { className: 'dk-error', style: { margin: '0 20px 16px' } }, notice) : null,
+        tabBar,
+        body,
+        notice && tab === 'clusters' ? h('div', { className: 'dk-error', style: { margin: '0 20px 16px' } }, notice) : null,
         modal
           ? h(ClusterModal, {
               t,
@@ -2769,6 +3058,45 @@ window.__ModuleLoader__.load({
       return Number.isNaN(n) ? -1 : n
     }
 
+    // Translate a list filter string into a matcher applied to every cell value:
+    //  - /pattern/flags  -> RegExp.search (anywhere in the cell), e.g. /^web-.*$/i
+    //  - contains * or ? -> treated as a whole-cell glob (* = any run, ? = one char)
+    //  - otherwise       -> plain case-insensitive substring
+    // Returns null for empty/whitespace input (meaning "no filtering").
+    const compileFilter = (raw) => {
+      const s = String(raw || '').trim()
+      if (!s) return null
+      const reForm = /^\/([\s\S]*)\/([a-z]*)$/.exec(s)
+      if (reForm) {
+        try {
+          const re = new RegExp(reForm[1], reForm[2])
+          return { test: (v) => { re.lastIndex = 0; return re.test(v) } }
+        } catch { /* invalid regex: fall through to literal */ }
+      }
+      if (s.indexOf('*') !== -1 || s.indexOf('?') !== -1) {
+        const escaped = s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        const glob = '^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$'
+        try {
+          const re = new RegExp(glob, 'i')
+          return { test: (v) => { re.lastIndex = 0; return re.test(v) } }
+        } catch { /* fall through to substring */ }
+      }
+      const lower = s.toLowerCase()
+      return { test: (v) => String(v).toLowerCase().indexOf(lower) !== -1 }
+    }
+
+    // Render a row cell's searchable text: numbers/bools are stringified, arrays
+    // are joined, objects are JSON-stringified — so every column's content can be
+    // matched by the list filter, not just the name column.
+    const cellText = (v) => {
+      if (v === null || v === undefined) return ''
+      if (typeof v === 'string') return v
+      if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+      if (Array.isArray(v)) return v.map((x) => (typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x ?? ''))).join(' ')
+      if (typeof v === 'object') return JSON.stringify(v)
+      return String(v)
+    }
+
     function ResourceView({ t, openDetail, openLogs, openShell, openRules }) {
       useStyles()
       const [boot, setBoot] = useState(null)
@@ -2814,6 +3142,12 @@ window.__ModuleLoader__.load({
       // Generic list column sort (name / namespace / age) for every resource
       // type that is neither pods nor nodes; dir: 1 asc | -1 desc, or null.
       const [genericSort, setGenericSort] = useState(null)
+      // Service list per-column filter: type, an array of selected values
+      // (empty = show all), mirroring the pod status/node filter pattern.
+      const [serviceColFilter, setServiceColFilter] = useState({ serviceType: [] })
+      // CRD list per-column filter: group / scope, mirroring the pod status/node
+      // filter pattern (empty = show all).
+      const [crdColFilter, setCrdColFilter] = useState({ crdGroup: [], crdScope: [] })
       // Session-only read/write override tick: bump to re-render after the
       // session-page mode select writes sessionModeOverrides (a plain module
       // map that React cannot observe on its own).
@@ -2900,7 +3234,7 @@ window.__ModuleLoader__.load({
       // but a drilled-in CRD overrides it while the picker stays on CRDs.
       const listKind = crdTarget ? `${crdTarget.plural}.${crdTarget.group}` : kind
 
-      const loadList = useCallback(async (clusterName, kindId, nsSelection) => {
+      const loadList = useCallback(async (clusterName, kindId, nsSelection, forceRefresh) => {
         if (!clusterName) return
         const ticket = ++seq.current
         const sel = nsSelection || []
@@ -2913,6 +3247,10 @@ window.__ModuleLoader__.load({
             kind: kindId,
             namespace: allNamespaces ? undefined : sel[0],
             allNamespaces,
+            // An explicit refresh (manual ↻ button, auto-refresh tick, kind switch,
+            // cluster/namespace change) bypasses the per-type cache. Plain returns
+            // to a previously viewed list hit the cache instead.
+            refresh: forceRefresh === true,
           })
           if (ticket !== seq.current) return
           if (result.ok) retryTick.current = 0
@@ -3013,7 +3351,7 @@ window.__ModuleLoader__.load({
               // kind while the current kind is cluster-scoped (CRDs, nodes…).
               // Sending it would filter every cluster-scoped row away.
               const scope = isKindScoped(kind) && !crdTarget ? [] : nsSel
-              if (forceList || current) await loadList(current, listKind, scope)
+              if (forceList || current) await loadList(current, listKind, scope, forceList)
             }
           }
           return state
@@ -3113,6 +3451,8 @@ window.__ModuleLoader__.load({
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
         setGenericSort(null)
+        setServiceColFilter({ serviceType: [] })
+        setCrdColFilter({ crdGroup: [], crdScope: [] })
         setExpanded({})
         try { await call('switch', { cluster: value }) } catch {}
         const need = await probeSelected(value)
@@ -3136,6 +3476,8 @@ window.__ModuleLoader__.load({
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
         setGenericSort(null)
+        setServiceColFilter({ serviceType: [] })
+        setCrdColFilter({ crdGroup: [], crdScope: [] })
         setExpanded({})
         loadList(selected, listKind, value)
       }, [selected, listKind, loadList])
@@ -3150,6 +3492,8 @@ window.__ModuleLoader__.load({
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
         setGenericSort(null)
+        setServiceColFilter({ serviceType: [] })
+        setCrdColFilter({ crdGroup: [], crdScope: [] })
         setExpanded({})
         const scope = isKindScoped(value) ? [] : nsSel
         if (scope.length !== nsSel.length) setNsSel(scope)
@@ -3173,6 +3517,8 @@ window.__ModuleLoader__.load({
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
         setGenericSort(null)
+        setServiceColFilter({ serviceType: [] })
+        setCrdColFilter({ crdGroup: [], crdScope: [] })
         setExpanded({})
         // Open on all namespaces: the CRD list is cluster-scoped, so any
         // namespace selection still around belongs to an earlier kind.
@@ -3231,6 +3577,8 @@ window.__ModuleLoader__.load({
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
         setGenericSort(null)
+        setServiceColFilter({ serviceType: [] })
+        setCrdColFilter({ crdGroup: [], crdScope: [] })
         setExpanded({})
         if (nsSel.length) setNsSel([])
         loadList(selected, 'pods', [])
@@ -3286,10 +3634,12 @@ window.__ModuleLoader__.load({
       }, [selected, expanded])
 
       const filtered = useMemo(() => {
-        const needle = filter.trim().toLowerCase()
+        // Global list filter: matches any column's content, with /regex/ or
+        // * ? wildcard support (see compileFilter). null = no filter.
+        const matcher = compileFilter(filter)
         const podList = String(kind).split('.')[0] === 'pods'
         let out = rows
-        if (needle) out = out.filter((row) => String(row.name || '').toLowerCase().includes(needle))
+        if (matcher) out = out.filter((row) => Object.values(row).some((v) => matcher.test(cellText(v))))
         if (podFilter) {
           const set = new Set(podFilter.pods)
           out = out.filter((row) => set.has(row.name))
@@ -3331,20 +3681,38 @@ window.__ModuleLoader__.load({
             })
           }
         }
+        // Service list only: per-column TYPE filter (empty selection = show all),
+        // mirroring the pod status/node filter.
+        if (String(kind).split('.')[0] === 'services') {
+          const colF = serviceColFilter || {}
+          if (colF.serviceType && colF.serviceType.length) {
+            out = out.filter((row) => colF.serviceType.includes(String(row.status || '')))
+          }
+        }
+        // CRD list only: per-column filters (group / scope), mirroring the pod
+        // status/node and service TYPE filter patterns (empty = show all).
+        if (String(kind).split('.')[0] === 'customresourcedefinitions') {
+          const colF = crdColFilter || {}
+          for (const key of ['crdGroup', 'crdScope']) {
+            const picked = colF[key]
+            if (picked && picked.length) out = out.filter((row) => picked.includes(String(row[key] || '')))
+          }
+        }
         // Everything else: name / namespace / age columns are sortable. Age
         // compares by creationTimestamp, name/namespace by text.
         if (!podList && String(kind).split('.')[0] !== 'nodes' && genericSort) {
           const { key, dir } = genericSort
           out = out.slice().sort((a, b) => {
             if (key === 'age') return (ageMs(b) - ageMs(a)) * dir
-            const field = key === 'ns' ? 'namespace' : key
-            const va = String(a[field] ?? '').toLowerCase()
-            const vb = String(b[field] ?? '').toLowerCase()
+            // CRD-instance printer-column: the value lives in row.kv, not row[key].
+            const getv = (r) => (r.kv && r.kv[key] != null) ? String(r.kv[key]) : String(r[(key === 'ns' ? 'namespace' : key)] ?? '')
+            const va = getv(a).toLowerCase()
+            const vb = getv(b).toLowerCase()
             return va.localeCompare(vb) * dir
           })
         }
         return out
-      }, [rows, filter, podFilter, kind, podColFilter, podSort, nodeColFilter, nodeSort, genericSort])
+      }, [rows, filter, podFilter, kind, podColFilter, podSort, nodeColFilter, nodeSort, serviceColFilter, crdColFilter, genericSort])
 
       // A drilled-in CRD kind is tracked explicitly: it is not in KINDS, so its
       // namespace scope comes from the CRD row it was opened from.
@@ -3361,6 +3729,7 @@ window.__ModuleLoader__.load({
       // that, when clicked, narrows the list to the pods they own.
       const showPodsColumn = loggableBase === 'deployments'
         || loggableBase === 'statefulsets' || loggableBase === 'daemonsets' || loggableBase === 'jobs'
+        || loggableBase === 'services'
       // The "其他" column only carries meaningful per-kind extras; pods,
       // workloads, services, config maps, secrets, storage and ingress show
       // nothing useful in it, so it is dropped for those kinds.
@@ -3469,7 +3838,7 @@ window.__ModuleLoader__.load({
         daemonsets:   ['name', 'ns', 'readyBadge', 'age', 'logs', 'pods', 'ops'],
         jobs:         ['name', 'ns', 'readyBadge', 'jobStatus', 'age', 'pods', 'ops'],
         cronjobs:     ['name', 'ns', 'schedule', 'suspended', 'age', 'ops'],
-        services:     ['name', 'ns', 'type', 'clusterIP', 'externalIP', 'ports', 'age', 'ops'],
+        services:     ['name', 'ns', 'serviceType', 'clusterIP', 'externalIP', 'ports', 'pods', 'age', 'ops'],
         configmaps:   ['name', 'ns', 'data', 'age', 'ops'],
         secrets:      ['name', 'ns', 'data', 'age', 'ops'],
         persistentvolumeclaims: ['name', 'ns', 'capacity', 'status', 'accessMode', 'storageClass', 'volume', 'age', 'ops'],
@@ -3523,6 +3892,7 @@ window.__ModuleLoader__.load({
         schedule: (row) => h('td', null, row.ready || ''),
         suspended: (row) => h('td', null, row.suspended ? 'true' : 'false'),
         type: (row) => h('td', null, row.status || ''),
+        serviceType: (row) => h('td', null, row.status || ''),
         clusterIP: (row) => td.mono(row, 'ready'),
         externalIP: (row) => td.mono(row, 'externalIP'),
         ports: (row) => td.muted(row, 'ports'),
@@ -3631,6 +4001,7 @@ window.__ModuleLoader__.load({
         schedule: () => h('th', null, t('col.schedule')),
         suspended: () => h('th', null, t('col.suspended')),
         type: () => h('th', null, t('col.type')),
+        serviceType: () => h('th', null, t('col.type')),
         clusterIP: () => h('th', null, t('col.clusterip')),
         externalIP: () => h('th', null, t('col.externalip')),
         ports: () => h('th', null, t('col.ports')),
@@ -3682,7 +4053,8 @@ window.__ModuleLoader__.load({
       const genericCols = ['name', 'ns', 'ready', 'status', 'age', 'class', 'host', 'extra', 'logs', 'pods', 'ops']
       // Custom resources have no shared schema: name/namespace/status plus the
       // values their CRD's additionalPrinterColumns produced (backend → extra).
-      const crdCols = ['name', 'ns', 'status', 'extra', 'age']
+      // CRD instances (activeCrd) build their columns dynamically from row.kv
+      // instead of this fixed set (see the columns map below).
       // Distinct values for the column filters, derived from the rows currently
       // loaded so each dropdown lists real choices. An empty selection in a
       // column means "show all".
@@ -3696,6 +4068,13 @@ window.__ModuleLoader__.load({
         arch: distinctOf((r) => String(r.arch || '')),
         type: distinctOf((r) => String(r.type || '')),
         zone: distinctOf((r) => String(r.zone || '')),
+      }), [rows])
+      const serviceColOptions = useMemo(() => ({
+        serviceType: distinctOf((r) => String(r.status || '')),
+      }), [rows])
+      const crdColOptions = useMemo(() => ({
+        crdGroup: distinctOf((r) => String(r.crdGroup || '')),
+        crdScope: distinctOf((r) => String(r.crdScope || '')),
       }), [rows])
 
       // Sortable/filterable header cell. Clicking the label cycles asc → desc → none;
@@ -3737,9 +4116,28 @@ window.__ModuleLoader__.load({
       // only when the column is actually shown).
       const GENERIC_SORTABLE = { name: 'col.name', ns: 'col.namespace', age: 'col.age' }
       const genericTh = makeTh(genericSort, setGenericSort, {}, {}, {})
+      // Service list: the TYPE column is filterable (like pod status/node); it
+      // shares the generic sort state so name/ns/age/type sort consistently.
+      const serviceTh = makeTh(genericSort, setGenericSort, serviceColFilter, setServiceColFilter, serviceColOptions)
+      // CRD list: the GROUP and SCOPE columns are filterable (like service TYPE
+      // / pod status/node); they share the generic sort state too.
+      const crdTh = makeTh(genericSort, setGenericSort, crdColFilter, setCrdColFilter, crdColOptions)
       const NODE_FILTERABLE = { arch: true, type: true, zone: true }
 
-      const spec = activeCrd ? crdCols : (kindCols[loggableBase] || genericCols)
+      // CRD instances: name/namespace(if any)/age stay fixed; every
+      // additionalPrinterColumn value (backend → row.kv) becomes its own dynamic
+      // column, the printer-column key as header and the value as the cell.
+      const crdKvKeys = activeCrd
+        ? (() => {
+            const seen = []
+            for (const r of rows) {
+              if (!r.kv) continue
+              for (const k of Object.keys(r.kv)) if (!seen.includes(k)) seen.push(k)
+            }
+            return seen
+          })()
+        : []
+      const spec = activeCrd ? ['name', 'ns', 'age', ...crdKvKeys] : (kindCols[loggableBase] || genericCols)
       const isNodes = loggableBase === 'nodes'
       const columns = spec
         .map((col) => {
@@ -3747,6 +4145,19 @@ window.__ModuleLoader__.load({
             return { th: nodeTh(col, t(NODE_SORTABLE[col]), NODE_FILTERABLE[col] ? { filter: col } : {}), td: td[col] }
           }
           const gl = GENERIC_SORTABLE[col]
+          if (loggableBase === 'services' && col === 'serviceType') {
+            return { th: serviceTh('serviceType', t('col.type'), { filter: 'serviceType' }), td: td[col] }
+          }
+          if (loggableBase === 'customresourcedefinitions' && (col === 'crdGroup' || col === 'crdScope')) {
+            return { th: crdTh(col, t(col === 'crdGroup' ? 'col.crdgroup' : 'col.crdscope'), { filter: col }), td: td[col] }
+          }
+          // Dynamic CRD-instance printer-column: header = key, cell = kv value.
+          if (activeCrd && crdKvKeys.includes(col)) {
+            return {
+              th: genericTh(col, col),
+              td: (row) => h('td', { className: 'dk-mono' }, (row.kv && row.kv[col] != null) ? String(row.kv[col]) : '—'),
+            }
+          }
           if (gl && (col !== 'ns' || showNamespaceColumn)) {
             return { th: genericTh(col, t(gl)), td: td[col] }
           }

@@ -44,6 +44,26 @@ const KUBECTL_BACKOFF_MAX_MS = 60000
 // A missing resource type is stable (it only changes on install/uninstall), so a
 // short negative cache keeps an auto-refreshing tab from re-probing it every tick.
 const MISSING_TYPE_TTL_MS = 5 * 60 * 1000
+// CRD metadata (the ~200KB printer-column index) rarely changes, so a long TTL
+// spares every return to the CRD list or a CRD instance table from re-fetching it.
+const CRD_CACHE_TTL_MS = 60 * 60 * 1000
+
+// Every resource type the plugin can list, used as the rows of the "资源缓存"
+// (Resource Cache) config tab. Keys are the BASE kind (the part of the kind id
+// before the group, e.g. `deployments.apps` → `deployments`); the per-type cache
+// TTL is configured in seconds. `customresourcedefinitions` matches the long-lived
+// CRD metadata cache; every other type is uncached (0) by default.
+const SUPPORTED_RESOURCE_TYPES = [
+  'customresourcedefinitions', 'pods', 'deployments', 'statefulsets', 'daemonsets',
+  'jobs', 'cronjobs', 'horizontalpodautoscalers', 'verticalpodautoscalers',
+  'services', 'ingresses', 'configmaps', 'secrets', 'persistentvolumeclaims',
+  'events', 'nodes', 'namespaces', 'serviceaccounts', 'roles', 'rolebindings',
+  'clusterroles', 'clusterrolebindings', 'rbacusers', 'rbacgroups',
+]
+/** Default per-type cache TTL (seconds). 0 = disabled. */
+const DEFAULT_CACHE_SECONDS = { customresourcedefinitions: 3600 }
+/** Upper bound for a user-configured cache TTL (seconds), to avoid absurd values. */
+const MAX_CACHE_SECONDS = 24 * 60 * 60
 const MISSING_TYPE_RE = /doesn't have a resource type|the server could not find the requested resource/i
 const CLUSTER_SCOPED = new Set([
   'nodes', 'node', 'namespaces', 'namespace', 'ns', 'persistentvolumes', 'pv',
@@ -588,12 +608,15 @@ function decorateCustomRow(row, item, info) {
   // would be pure noise.
   const columns = (info.printerColumns || []).filter((column) => !/^(name|namespace|age)$/i.test(column.name))
   const parts = []
+  const kv = {}
   for (const column of columns) {
     const text = printerValue(readJSONPath(item, column.jsonPath), column.type)
     if (text === '') continue
+    kv[column.name] = text
     parts.push(`${column.name}=${text}`)
   }
   if (parts.length > 0) {
+    row.kv = kv
     row.extra = row.extra ? `${row.extra} · ${parts.join(' · ')}` : parts.join(' · ')
     if (!row.status && columns.length > 0) {
       // The first declared column is normally the resource's readiness/status
@@ -799,6 +822,12 @@ class KubeService {
     this.unsupported = new Map()
     /** Role/ClusterRole bindings per cluster, for the aggregated User/Group views. */
     this.rbacCache = new Map()
+    /**
+     * Per-kind list-result cache (the user-configurable 资源缓存 feature).
+     * Keyed `${cluster}\u0000${kind}\u0000${namespace}\u0000${allNamespaces}\u0000${selector}`
+     * → { at, value }. Only populated for kinds whose configured TTL > 0.
+     */
+    this.resourceCache = new Map()
     /** Live `kubectl exec` shells (interactive container terminals), keyed by id. */
     this.shells = new Map()
     this.shellSeq = 0
@@ -835,6 +864,53 @@ class KubeService {
     else delete map[name]
     this.saveState({ readOnly: map })
     return { name, readOnly: readOnly === true }
+  }
+
+  /**
+   * Effective per-type cache TTL (seconds), merged from the persisted config and
+   * the defaults. Returns a map over every SUPPORTED_RESOURCE_TYPES.
+   */
+  cacheConfig() {
+    const stored = this.state().cache || {}
+    const map = {}
+    for (const base of SUPPORTED_RESOURCE_TYPES) {
+      const value = Number(stored[base])
+      map[base] = Number.isFinite(value) && value >= 0 ? Math.floor(value) : (DEFAULT_CACHE_SECONDS[base] ?? 0)
+    }
+    return map
+  }
+
+  /** The configured cache TTL in seconds for one base kind (0 = disabled). */
+  cacheSecondsFor(base) {
+    return this.cacheConfig()[base] ?? 0
+  }
+
+  /** Persist a per-type cache config. Values are clamped to sane bounds. */
+  async setCacheConfig(cache = {}) {
+    const stored = this.state().cache || {}
+    const next = { ...stored }
+    if (cache && typeof cache === 'object') {
+      for (const [base, raw] of Object.entries(cache)) {
+        if (!SUPPORTED_RESOURCE_TYPES.includes(base)) continue
+        const value = Number(raw)
+        if (!Number.isFinite(value) || value < 0) continue
+        // Store the explicit value (including 0 = disabled). Only keys the user
+        // has set live in state; absent keys fall back to DEFAULT_CACHE_SECONDS.
+        next[base] = Math.min(Math.floor(value), MAX_CACHE_SECONDS)
+      }
+    }
+    this.saveState({ cache: next })
+    // A config change must not leave stale rows in the list cache.
+    this.resourceCache.clear()
+    return { ok: true, cache: this.cacheConfig() }
+  }
+
+  /** Drop cached list rows for a cluster (used after any write/delete). */
+  invalidateResourceCache(cluster) {
+    const prefix = `${cluster}\u0000`
+    for (const key of this.resourceCache.keys()) {
+      if (key.startsWith(prefix)) this.resourceCache.delete(key)
+    }
   }
 
   /**
@@ -1164,7 +1240,7 @@ class KubeService {
    */
   async crds(cluster, { refresh = false } = {}) {
     const cached = this.crdsCache.get(cluster)
-    if (!refresh && cached && Date.now() - cached.at < 60000) {
+    if (!refresh && cached && Date.now() - cached.at < CRD_CACHE_TTL_MS) {
       return { ok: true, crds: cached.list }
     }
     const template = '{range .items[*]}'
@@ -1252,7 +1328,7 @@ class KubeService {
   /** Populate the CRD index before listing a custom resource (best effort). */
   async ensureCrds(cluster) {
     const cached = this.crdsCache.get(cluster)
-    if (cached && Date.now() - cached.at < 60000) return
+    if (cached && Date.now() - cached.at < CRD_CACHE_TTL_MS) return
     await this.crds(cluster)
   }
 
@@ -1452,12 +1528,15 @@ class KubeService {
           crdGroup: info.group,
         }
         const parts = []
+        const kv = {}
         columns.forEach((column, index) => {
           const text = printerValue(cell(cells, labels[index]), column.type)
           if (text === '') return
+          kv[column.name] = text
           parts.push(`${column.name}=${text}`)
         })
         if (parts.length > 0) {
+          row.kv = kv
           row.extra = parts.join(' · ')
           // Match decorateCustomRow: the first declared column is normally the
           // resource's readiness/status (e.g. Argo's "Sync Status").
@@ -1470,7 +1549,30 @@ class KubeService {
     return { ok: true, count: rows.length, rows }
   }
 
-  async list(cluster, kind, { namespace, allNamespaces, selector } = {}) {
+  async list(cluster, kind, { namespace, allNamespaces, selector, refresh } = {}) {
+    const scope = allNamespaces ? ['-A'] : scopeArgs(kind, namespace)
+    const selectorArgs = selector ? ['-l', selector] : []
+    const base = String(kind).split('.')[0].toLowerCase()
+    const spec = TABLE_COLS[base]
+
+    // Per-kind list cache: when the configured TTL for this base is > 0, serve
+    // the previous successful result while it is still fresh. `refresh` bypasses
+    // the cache so a manual refresh always hits the cluster.
+    const ttlSec = this.cacheSecondsFor(base)
+    if (ttlSec > 0 && refresh !== true) {
+      const cacheKey = [cluster, kind, namespace || '', allNamespaces ? 'A' : '', selector || ''].join('\u0000')
+      const hit = this.resourceCache.get(cacheKey)
+      if (hit && Date.now() - hit.at < ttlSec * 1000) {
+        return { ...hit.value, cached: true, fromCache: true }
+      }
+      const result = await this.listUncached(cluster, kind, { namespace, allNamespaces, selector })
+      if (result && result.ok) this.resourceCache.set(cacheKey, { at: Date.now(), value: result })
+      return result
+    }
+    return this.listUncached(cluster, kind, { namespace, allNamespaces, selector })
+  }
+
+  async listUncached(cluster, kind, { namespace, allNamespaces, selector } = {}) {
     const scope = allNamespaces ? ['-A'] : scopeArgs(kind, namespace)
     const selectorArgs = selector ? ['-l', selector] : []
     const base = String(kind).split('.')[0].toLowerCase()
@@ -1691,6 +1793,7 @@ class KubeService {
     if (namespace) args.push('-n', namespace)
     const result = await this.kubectl(cluster, args, { timeoutMs: 120000, input: payload })
     if (!result.ok) return result
+    this.invalidateResourceCache(cluster)
     return { ok: true, text: String(result.stdout || '').trim() || '(applied)' }
   }
 
@@ -1760,9 +1863,19 @@ class KubeService {
     let labels = {}
     try {
       const obj = JSON.parse(selResult.stdout)
-      labels = (obj.spec && obj.spec.selector && obj.spec.selector.matchLabels) || {}
+      const sel = obj.spec && obj.spec.selector
+      // Deployments/StatefulSets/DaemonSets/Jobs nest their selector under
+      // .matchLabels; a Service carries a flat label map directly on
+      // spec.selector. Either shape resolves here.
+      labels = (sel && sel.matchLabels) || (sel || {})
     } catch { labels = {} }
     const pairs = Object.keys(labels).map((k) => `${k}=${labels[k]}`)
+    // A Service with no selector (ExternalName, or headless without one)
+    // routes to no pods, so unlike workloads there is no "all pods in the
+    // namespace" fallback — it would be misleading.
+    if (base === 'services' && pairs.length === 0) {
+      return { ok: true, pods: [], namespace: ns }
+    }
     const args = ['get', 'pods', ...scopeArgs('pods', ns)]
     if (pairs.length) args.push('-l', pairs.join(','))
     args.push('-o', 'name')
@@ -1817,6 +1930,7 @@ class KubeService {
     }[action]
     const result = await this.kubectl(cluster, args, { timeoutMs: 60000 })
     if (!result.ok) return result
+    this.invalidateResourceCache(cluster)
     return {
       ok: true,
       action,
@@ -1846,6 +1960,7 @@ class KubeService {
     const scope = clusterScoped ? [] : ['-n', String(namespace)]
     const result = await this.kubectl(cluster, ['delete', `${kind}/${name}`, ...scope, '--wait=false'], { timeoutMs: 60000 })
     if (!result.ok) return result
+    this.invalidateResourceCache(cluster)
     return { ok: true, text: String(result.stdout || '').trim() || '(deleted)' }
   }
 
@@ -1868,6 +1983,7 @@ class KubeService {
       : [action, name]
     const result = await this.kubectl(cluster, args, { timeoutMs: action === 'drain' ? 180000 : 30000 })
     if (!result.ok) return result
+    this.invalidateResourceCache(cluster)
     const verb = { cordon: '已封锁', uncordon: '已解封', drain: '已排空' }[action]
     return { ok: true, action, text: String(result.stdout || '').trim() || `节点 ${name} ${verb}` }
   }
@@ -3020,6 +3136,8 @@ export function apply(ctx, config = {}) {
     route('/dsh-kube/cluster', async (input) => ({ ok: true, ...service.clusterYaml(input.cluster) })),
     route('/dsh-kube/namespaces', async (input) => service.namespaces(input.cluster)),
     route('/dsh-kube/crds', async (input) => service.crds(input.cluster, { refresh: input.refresh === true })),
+    route('/dsh-kube/cache-config', async () => ({ ok: true, cache: service.cacheConfig() })),
+    route('/dsh-kube/set-cache-config', async (input) => service.setCacheConfig(input.cache)),
     route('/dsh-kube/list', async (input) => service.list(input.cluster, input.kind, input)),
     route('/dsh-kube/probe', async (input) => service.probe(input.cluster)),
     route('/dsh-kube/yaml', async (input) => service.objectYaml(input.cluster, input.kind, input.name, input.namespace, { raw: input.raw === true, forEdit: input.forEdit === true })),
