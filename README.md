@@ -144,8 +144,9 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 
 1. 校验 tag 版本与 `package.json` 一致；
 2. `npm pack` 打包；
-3. 用 `scripts/generate-index.mjs` 生成 DSH 插件市场索引 `site/index.json`（git source，固定到该 commit）；
-4. 把索引部署到 GitHub Pages；
-5. 创建 GitHub Release 并附上 `.tgz`。
+3. **`npm publish --provenance` 发布到 npm**（采用 npm **Trusted Publishing**（OIDC），不需要任何 token；首次发布需先在 npm 官网把 `dsh-kube` 包的 Trusted Publishing 指向本仓库 `maplewf/dsh-kube`，首个版本需手动发布一次建立信任）；
+4. 用 `scripts/generate-index.mjs` 生成 DSH 插件市场索引 `site/index.json`（git source，固定到该 commit）；
+5. 把索引部署到 GitHub Pages；
+6. 创建 GitHub Release 并附上 `.tgz`。
 
 仓库需在 Settings → Pages 把 Source 选为 **GitHub Actions**。索引地址即 `https://<owner>.github.io/<repo>/index.json`。
