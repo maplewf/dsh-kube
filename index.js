@@ -218,6 +218,8 @@ function hintFor(kind) {
       return 'The dsh web service is restarting; retry in a moment.'
     case 'unsupported':
       return 'This cluster does not serve that resource type (the CRD/operator is not installed there). Pick another cluster or install it first.'
+    case 'readonly':
+      return 'The cluster is in read-only mode: every write operation (delete, scale, rollout, apply, cordon/drain) is refused. Switch it back to read-write in the Kubernetes panel to allow writes.'
     default:
       return undefined
   }
@@ -818,6 +820,37 @@ class KubeService {
     return next
   }
 
+  /** Whether a cluster is in user-selected read-only mode (default: read-write). */
+  readOnlyOf(cluster) {
+    const map = this.state().readOnly || {}
+    return map[safeName(cluster)] === true
+  }
+
+  /** Set (or clear) the read-only flag of one cluster, persisted in state. */
+  async setClusterMode(cluster, readOnly) {
+    const name = safeName(cluster)
+    if (!fs.existsSync(this.clusterFile(name))) throw new Error(`集群 "${name}" 不存在`)
+    const map = { ...(this.state().readOnly || {}) }
+    if (readOnly) map[name] = true
+    else delete map[name]
+    this.saveState({ readOnly: map })
+    return { name, readOnly: readOnly === true }
+  }
+
+  /**
+   * Shared refusal for every write operation while a cluster is read-only.
+   * The UI already hides the ops column / YAML edit in that mode; this is the
+   * server-side fence so agent tools and direct route calls get refused too.
+   */
+  readOnlyRefusal(cluster, actionLabel) {
+    return {
+      ok: false,
+      kind: 'readonly',
+      error: `集群「${cluster}」处于只读状态，${actionLabel}已被禁用`,
+      hint: hintFor('readonly'),
+    }
+  }
+
   files() {
     try {
       return fs.readdirSync(this.dir)
@@ -950,6 +983,7 @@ class KubeService {
         name,
         current: name === current,
         auth: { kind: 'none', login: false },
+        readOnly: this.readOnlyOf(name),
         server: '',
         namespace: 'default',
         state: this.auth.get(name) || { state: 'unknown' },
@@ -1637,6 +1671,7 @@ class KubeService {
    * errors, RBAC denials, immutable field conflicts) for the UI to show.
    */
   async applyYaml(cluster, manifest, { namespace } = {}) {
+    if (this.readOnlyOf(cluster)) return this.readOnlyRefusal(cluster, 'YAML 应用')
     const text = String(manifest || '')
     if (!/\bapiVersion\s*:/.test(text) || !/\bkind\s*:/.test(text)) {
       return { ok: false, kind: 'invalid', error: '内容不像 Kubernetes 资源（缺少 apiVersion 或 kind）' }
@@ -1746,6 +1781,7 @@ class KubeService {
    * agent tools and any future caller get the same refusals and wording.
    */
   async workloadAction(cluster, input = {}) {
+    if (this.readOnlyOf(cluster)) return this.readOnlyRefusal(cluster, '工作负载操作')
     const kind = String(input.kind || '')
     const base = kind.split('.')[0].toLowerCase()
     const workload = { deployments: 'deployment', statefulsets: 'statefulset', daemonsets: 'daemonset' }[base]
@@ -1797,6 +1833,7 @@ class KubeService {
    * kubectl error (if any) is surfaced verbatim.
    */
   async deleteResource(cluster, kind, name, namespace) {
+    if (this.readOnlyOf(cluster)) return this.readOnlyRefusal(cluster, '资源删除')
     const base = String(kind || '').split('.')[0].toLowerCase()
     if (base === 'rbacusers' || base === 'rbacgroups') {
       return { ok: false, kind: 'invalid', error: '用户/组是从绑定聚合出来的，没有可删除的实体对象' }
@@ -1820,6 +1857,7 @@ class KubeService {
    * destructive, real-cluster operation — callers must confirm first.
    */
   async nodeAction(cluster, node, action) {
+    if (this.readOnlyOf(cluster)) return this.readOnlyRefusal(cluster, '节点操作')
     const name = String(node || '').trim()
     if (!name) return { ok: false, kind: 'invalid', error: '缺少节点名称' }
     if (!['cordon', 'uncordon', 'drain'].includes(action)) {
@@ -2788,6 +2826,7 @@ export function apply(ctx, config = {}) {
       additionalProperties: false,
     },
     run: async (args) => {
+      if (service.readOnlyOf(args.cluster)) return service.readOnlyRefusal(args.cluster, 'YAML 应用')
       if (!args.confirm) {
         return {
           ok: true,
@@ -2820,6 +2859,7 @@ export function apply(ctx, config = {}) {
       additionalProperties: false,
     },
     run: async (args) => {
+      if (service.readOnlyOf(args.cluster)) return service.readOnlyRefusal(args.cluster, '扩缩副本')
       const target = `${args.kind}/${args.name} in ${args.namespace || 'default'} of ${args.cluster}`
       if (!args.confirm) return { ok: true, requiresConfirmation: true, text: `尚未执行（需要用户确认）：将把 ${target} 扩缩到 ${args.replicas} 副本。确认后以 confirm=true 重新调用。` }
       const result = await service.kubectl(args.cluster, ['scale', args.kind, args.name, ...scopeArgs(args.kind, args.namespace), '--replicas', String(args.replicas)], { timeoutMs: 60000 })
@@ -2845,6 +2885,7 @@ export function apply(ctx, config = {}) {
       additionalProperties: false,
     },
     run: async (args) => {
+      if (service.readOnlyOf(args.cluster)) return service.readOnlyRefusal(args.cluster, 'rollout 操作')
       const target = `${args.kind}/${args.name} in ${args.namespace || 'default'} of ${args.cluster}`
       if (args.action !== 'status' && !args.confirm) {
         return { ok: true, requiresConfirmation: true, text: `尚未执行（需要用户确认）：将对 ${target} 执行 rollout ${args.action}。确认后以 confirm=true 重新调用。` }
@@ -2872,6 +2913,7 @@ export function apply(ctx, config = {}) {
       additionalProperties: false,
     },
     run: async (args) => {
+      if (service.readOnlyOf(args.cluster)) return service.readOnlyRefusal(args.cluster, '资源删除')
       const clusterScoped = CLUSTER_SCOPED.has(String(args.kind).split('.')[0].toLowerCase())
       if (!clusterScoped && !args.namespace) {
         return { ok: false, kind: 'error', error: '删除命名空间级资源必须显式指定 namespace' }
@@ -2959,6 +3001,8 @@ export function apply(ctx, config = {}) {
   })
 
   const routes = [
+    route('/dsh-kube/mode', async (input) => ({ ok: true, readOnly: service.readOnlyOf(input.cluster) })),
+    route('/dsh-kube/set-cluster-mode', async (input) => ({ ok: true, ...(await service.setClusterMode(input.cluster, input.readOnly === true)) })),
     route('/dsh-kube/state', async () => ({
       ok: true,
       configDir: service.dir,

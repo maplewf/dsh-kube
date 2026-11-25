@@ -42,6 +42,7 @@
 ## 面板
 
 - **资源**：选集群、命名空间、资源类型（Pods/Deployments/StatefulSets/DaemonSets/Jobs/CronJobs/HPAs/VPAs/Services/Ingress/ConfigMaps/Secrets/PVC/Events/Nodes/Namespaces/ServiceAccounts/Roles/RoleBindings/ClusterRoles/ClusterRoleBindings/Users/Groups/CRDs），按名称过滤，点一行在右侧抽屉看 YAML、Describe、Pod 日志。资源类型是可搜索的组合框：点开后在输入框里打关键字（中文名或 kind 都行），↑/↓ 选择、Enter 确认、Esc 关闭。**Pod 列表**的列（名称/命名空间/状态/存在时长/Pod IP/所在节点）表头可点击排序（升序→降序→取消，活动列标黄色并带 ↑/↓ 箭头，存在时长按创建时间排序）；状态/Pod IP/所在节点三列在表头内各有一个**多选下拉菜单**（默认「全部」，点开是可搜索的复选框列表，可勾选多个离散值，如同时选 Running 和 CrashLoopBackOff），与顶部的按名称过滤叠加。
+- **通用排序**：除 Pod 与节点外的所有资源列表（工作负载、Service、ConfigMap/Secret、PVC、Ingress、Event、ServiceAccount、Role/Binding、HPA/VPA、CRD 实例、CRD 定义、Namespaces 等）也都支持对 **名称 / 命名空间 / 存在时长** 三列点击表头排序（升序→降序→取消，活动列黄色 + ↑/↓ 箭头）；存在时长按创建时间排序（最久的排最前），命名空间列仅在它可见时（多命名空间视图）可排序；节点列表额外把「名称」列也纳入可排序。
 - **CRD**：资源类型下拉只列内置类型；`CRDs` 项展示集群已安装的 CustomResourceDefinition（Kind/Group/Scope/版本）。点击某行的 Kind 即进入该类型的实例列表：资源类型下拉仍停留在 `CRDs`，不会被 CRD 类型顶替；顶部横幅以黄底 badge 显示「正在显示 <group> 下的 <kind>」，可一键返回 CRDs；实例按 CRD 的 additionalPrinterColumns 展示。实例列表**不取整份 `-o json`**，而是用 `kubectl get -o custom-columns` 只投影名称/命名空间/创建时间 + CRD 声明的 printer 列（Argo Application 这类对象整份 JSON 约 24MB，接近 stdout 24MB 上限，投影后约 70KB），再由后端按 printer 列拼出「状态/其他」两列，渲染结果与 JSON 路径一致；CRD 没声明 printer 列、或投影表达式被 kubectl 拒绝时自动退回 JSON 路径。
 - **容器 Shell**：展开 Pod 行后，容器子表的「登录」列有一个终端图标。点击后由后端在该容器里探测 `bash`，没有则退到 `sh`；两者都没有时弹窗说明无法打开。可用时在右侧栏新开一个 shell 标签页：后端用 PTY（node-pty，随 DSH 一起安装）启动 `kubectl exec -it -- bash -i`，所以容器里是**真实 tty**（提示符、回显、颜色、行编辑、Ctrl-C、`top`/`vim` 这类全屏程序都可用）；前端用随插件内置的 xterm.js 渲染，面板尺寸变化会同步 `stty size`。关闭该标签页会杀掉对应的 kubectl 进程。xterm 静态文件由 `/dsh-kube/assets/` 提供，不需要构建步骤或外网。
 - **HPA / VPA**：HPAs 显示引用目标（`Deployment/xxx`）、当前/目标指标、副本范围（最小 → 最大 · 当前）；VPAs 显示更新模式、CPU/内存推荐值与 Provided 状态。VPA 是 CRD，集群没装时列表返回「没有提供 verticalpodautoscalers 资源类型」并缓存 5 分钟，不会每次刷新都重试。
@@ -56,6 +57,13 @@
 - **集群管理**：粘贴 kubeconfig 新增/更新集群、移除集群。
 
 集群状态按需探测：读资源成功即“已认证”，遇到 exec/令牌失败即“需要登录”，连不上即“不可达”。
+
+- **集群读写模式**：每个集群可设为 **读写**（默认，即当前行为）或 **只读**。集群管理页每行有一个模式下拉框（读写 / 只读），选择后立即切换，模式保存在插件状态文件（`dsh-kube-state.json` 的 `readOnly` 映射）；只读时下拉框显示黄字。只读模式生效范围（由前端与后端双重保障）：
+  - 列表的「操作」列整体隐藏（含工作负载/节点等所有操作菜单），表头与行都不渲染；
+  - 资源详情的 YAML 不再出现「编辑」按钮（读视图、Describe、复制仍可用）；
+  - 插件注册的写工具 `kube_apply` / `kube_scale` / `kube_rollout` / `kube_delete` 在调用时被后端直接拒绝（返回 `readonly` 错误与提示）；
+  - 后端在 `applyYaml`、`workloadAction`、`deleteResource`、`nodeAction` 四个服务方法入口统一检查，直接发起的写请求（绕过 UI）同样被拒，返回「集群处于只读状态，XX已被禁用」。
+只读不影响读操作（列表、详情、Describe、日志、端口转发、容器终端、RBAC 规则查看）与登录。会话视图顶部在只读集群上显示黄底「只读」徽标，集群管理页按钮显示「只读」（黄字）。
 
 ## 智能体工具
 

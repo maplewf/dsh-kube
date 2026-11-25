@@ -49,7 +49,7 @@ List/filter across Pods, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, 
 
 ### CRD
 
-The dropdown lists only built-in types; the `CRDs` entry shows installed CustomResourceDefinitions. Clicking a Kind drills into its instances (rendered with `additionalPrinterColumns`), with a banner showing the current group/kind and a one-click back.
+The dropdown lists only built-in types; the `CRDs` entry shows installed CustomResourceDefinitions. Clicking a Kind drills into its instances (rendered with `additionalPrinterColumns`), with a banner showing the current group/kind and a one-click back. Large CRD instance lists are fetched as a `custom-columns` projection (a 24 MB JSON list drops to ~70 KB), so they stay well under the output limit; if a CRD has no printer columns (or kubectl rejects the expression) the plugin transparently falls back to the full JSON path.
 
 ### In-container terminal
 
@@ -67,6 +67,10 @@ Any resource's YAML tab has an **Edit** button; saving warns it will be applied 
 
 The Nodes list replaces the old spec column with **CPU** and **Memory** as `request/capacity` (e.g. `1.75/8`, `1.4Gi/32Gi`): requests are summed across containers, **capacity comes from `status.capacity` rounded to the nearest power of two** (7.9 cores shows `8`, 30.6Gi shows `32Gi`), and memory units are **always binary** (K/M/G and Ki/Mi/Gi all ×1024). The **Pods** column becomes `running/capacity` (e.g. `12/110`). There are also **Type** and **Zone** columns. **Status** reflects the Ready condition and appends `SchedulingDisabled` when a node is cordoned; comma-separated states render as separate badges. Node actions add **cordon / uncordon / drain**.
 
+### Sorting & filtering
+
+**All** resource kinds support sorting on **name / age** (and **namespace** when the column is shown): click a header to cycle ascending → descending → off. **Pods** additionally sort on namespace, status and IP, and let you multi-select filters on **status** and **node**; **Nodes** sort on CPU / memory / pod count / arch / type / zone / age with multi-select filters on **arch / type / zone**. Filters are a funnel icon in the header (shows the selected count, stays out of the row height) opening a searchable checkbox panel; sorting uses the real numbers underneath (age parses kubectl's `3y323d`-style text, so it orders correctly even though the displayed value is human-readable).
+
 ### RBAC & rules matrix
 
 ServiceAccounts show secret counts, Roles/ClusterRoles show rule counts, bindings show roleRef and subjects. Users/Groups are aggregated from binding subjects. The **rule count** is a clickable link that opens a K9S-style **verb matrix** in the right sidebar with columns `资源 | API 组 | GET | LIST | WATCH | CREATE | PATCH | UPDATE | DELETE | DEL-LIST`; each rule is expanded per (API group × resource) row, verbs are unioned, granted verbs show a **green ✓** and denied a **red ✗**.
@@ -74,6 +78,10 @@ ServiceAccounts show secret counts, Roles/ClusterRoles show rule counts, binding
 ### Clusters & login
 
 Each context shows its auth method, probe status, and a login button. Login reuses the kubeconfig `exec` credential providers (`oidc-login`, `aws eks get-token`, …); DSH only hands the authorization URL to the browser and the code back into the process — **you approve in person**. The login badge reflects live observation and updates immediately on cluster switch.
+
+### Cluster read/write mode
+
+Each cluster can be set to **read-write** (the default) or **read-only** via a dropdown in cluster management (the choice persists in `dsh-kube-state.json`). In read-only mode the **Actions column disappears** from every resource list, the detail drawer's **Edit** button is hidden, and the agent's **write tools** (`kube_apply`, `kube_scale`, `kube_rollout`, `kube_delete`) refuse to run with a clear error; reads and login still work, and the panel shows a yellow "read-only" badge.
 
 ---
 

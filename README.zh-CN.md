@@ -49,7 +49,7 @@ dsh-kube/
 
 ### CRD
 
-资源类型下拉只列内置类型；`CRDs` 项展示集群已安装的 CustomResourceDefinition（Kind/Group/Scope/版本）。点击某行的 Kind 即进入该类型实例列表，顶部横幅以黄底 badge 提示当前显示的 group/kind，可一键返回。实例按 CRD 的 `additionalPrinterColumns` 展示。
+资源类型下拉只列内置类型；`CRDs` 项展示集群已安装的 CustomResourceDefinition（Kind/Group/Scope/版本）。点击某行的 Kind 即进入该类型实例列表，顶部横幅以黄底 badge 提示当前显示的 group/kind，可一键返回。实例按 CRD 的 `additionalPrinterColumns` 展示；**大列表走 `custom-columns` 投影**（24MB 的 JSON 实例列表可缩到 ~70KB），不会触到输出上限；若该 CRD 没有 printer 列或 kubectl 拒绝表达式，会自动回退完整 JSON 路径。
 
 ### 容器终端
 
@@ -67,6 +67,10 @@ dsh-kube/
 
 节点列表没有「规格」列，改为 **CPU** 与 **内存** 两列，值都是 `请求/容量`（如 `1.75/8`、`1.4Gi/32Gi`）：请求按容器聚合，**容量取 `status.capacity` 并取最近 2 的幂**（真实 `7.9` 核显示 `8`、`30.6Gi` 显示 `32Gi`），内存单位**一律二进制**（K/M/G 与 Ki/Mi/Gi 都按 1024，`32G`→`32Gi`）。**Pod 数列**变成 `已运行/可容纳`（如 `12/110`）。另有**类型**（`node.kubernetes.io/instance-type`）与**区域**（`topology.kubernetes.io/zone`）列。**状态**反映 Ready 条件；节点被 `kubectl cordon` 封锁时追加 `SchedulingDisabled`，状态逗号分隔后每个状态显示成独立徽标（Ready 绿 / SchedulingDisabled 黄 / 其它红）。节点操作新增**封锁/解封/排空**：`kubectl cordon|uncordon` 与 `kubectl drain --ignore-daemonsets --delete-emptydir-data`。
 
+### 排序与过滤
+
+**所有**资源类型都支持按**名称/存在时长**排序（有命名空间列时也支持命名空间）：点表头循环 升序 → 降序 → 取消。**Pod 列表**额外支持命名空间、状态、Pod IP 排序，并可对**状态**与**所在节点**做多选过滤；**节点列表**支持 CPU/内存/Pod 数/架构/类型/区域/存在时长排序，并可对**架构/类型/区域**做多选过滤。过滤入口是表头里的**漏斗图标**（显示已选数量，不占行高），点开是可搜索的复选框面板；排序用的是底层真实数值（存在时长能解析 kubectl 的 `3y323d` 这类人类文本，所以即使显示值是文字也能正确排序）。
+
 ### RBAC 与规则矩阵
 
 ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 显示 roleRef 与 subjects。Users/Groups 由所有绑定 subjects 聚合。Roles/ClusterRoles 的**规则数**是可点击链接，在右侧栏打开 **verb 矩阵**：表头 `资源 | API 组 | GET | LIST | WATCH | CREATE | PATCH | UPDATE | DELETE | DEL-LIST`，每个 rule 按 (API 组 × 资源) 展开一行（空用 `*`），同组同资源的动词取并集；有权限打**绿勾 ✓**，否则**红叉 ✗**。
@@ -74,6 +78,10 @@ ServiceAccounts 显示密钥数，Roles/ClusterRoles 显示规则数，Bindings 
 ### 集群与登录
 
 每个 context 显示认证方式（OIDC / AWS IAM / Azure / Token / 证书）、探测状态与登录按钮。登录复用 kubeconfig 的 `exec` 凭据插件（`oidc-login`、`aws eks get-token` 等），DSH 只把授权 URL 送到浏览器、把授权码送进进程，**用户亲自点同意**；登录状态徽标取自实时观测，切换集群后立即更新。
+
+### 集群读写模式
+
+集群管理里每个集群可用下拉框设置**读写**（默认）或**只读**（选择持久化到 `dsh-kube-state.json`）。只读模式下：所有资源列表的**操作列消失**、详情抽屉的**编辑按钮隐藏**、智能体**写工具**（`kube_apply`/`kube_scale`/`kube_rollout`/`kube_delete`）拒绝执行并返回明确错误；读操作与登录不受影响，面板顶部显示黄底「只读」徽标。
 
 ---
 

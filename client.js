@@ -85,6 +85,9 @@ window.__ModuleLoader__.load({
       'cluster.pasteHint': '粘贴该集群的 kubeconfig YAML（apiVersion/kind/clusters/contexts）。保存同名会覆盖更新。',
       'cluster.empty': '还没有集群，先添加一个。',
       'cluster.deleteConfirm': '确定删除集群「{name}」吗？',
+      'mode.readwrite': '读写',
+      'mode.readonly': '只读',
+      'mode.hint': '读写：可执行所有操作；只读：隐藏操作列、禁止编辑 YAML 与执行写操作工具。',
       'cluster.overwriteNotice': '名称相同会覆盖现有集群的配置。',
       'ctx.label': '集群',
       'ctx.empty': '还没有可用集群',
@@ -336,6 +339,9 @@ window.__ModuleLoader__.load({
       'cluster.pasteHint': 'Paste this cluster kubeconfig YAML (apiVersion/kind/clusters/contexts). Saving with the same name overwrites it.',
       'cluster.empty': 'No cluster yet. Add one first.',
       'cluster.deleteConfirm': 'Delete cluster "{name}"?',
+      'mode.readwrite': 'Read-Write',
+      'mode.readonly': 'Read-Only',
+      'mode.hint': 'Read-write: all operations allowed. Read-only: the ops column is hidden, YAML editing and write tools are refused.',
       'cluster.overwriteNotice': 'Saving with the same name overwrites the existing cluster config.',
       'ctx.label': 'Cluster',
       'ctx.empty': 'No cluster yet',
@@ -576,6 +582,9 @@ window.__ModuleLoader__.load({
 .dk-btn:hover{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l2)}
 .dk-btn:disabled{opacity:.5;cursor:default}
 .dk-btn.primary{background:var(--dsw-alias-brand-primary);border-color:transparent;color:#fff}
+.dk-btn.ro{color:#ffd60a;border-color:rgba(255,214,10,.55);font-weight:600}
+.dk-select.mode{width:88px;max-width:88px;padding:0 6px;margin-right:4px}
+.dk-select.ro{color:#ffd60a;border-color:rgba(255,214,10,.55);font-weight:600}
 .dk-btn.ghost{border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}
 .dk-btn.ghost:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}
 .dk-link-btn{font-weight:700;text-decoration:underline;color:var(--dsw-alias-brand-primary);background:transparent !important;border-color:transparent !important}
@@ -1705,6 +1714,18 @@ window.__ModuleLoader__.load({
       const [saving, setSaving] = useState(false)
       const [applyError, setApplyError] = useState(null)
       const [notice, setNotice] = useState(null)
+      const [readOnly, setReadOnly] = useState(false)
+
+      // A read-only cluster (user-set mode) forbids YAML editing; the backend
+      // refuses applyYaml too, this is the UI-side mirror.
+      useEffect(() => {
+        let alive = true
+        if (!cluster) { setReadOnly(false); return () => {} }
+        call('mode', { cluster }).then((result) => {
+          if (alive && result && result.ok) setReadOnly(result.readOnly === true)
+        }).catch(() => {})
+        return () => { alive = false }
+      }, [cluster])
 
       const reload = useCallback(async () => {
         if (!cluster || !kind) return { ok: false, error: t('state.error') }
@@ -1800,7 +1821,7 @@ window.__ModuleLoader__.load({
       }, [saving, draft, cluster, namespace, kind, name, t])
 
       const tabs = [['yaml', t('detail.yaml')], ['describe', t('detail.describe')]]
-      const canEdit = tab === 'yaml' && !pseudo && value !== null && !loading && !error
+      const canEdit = tab === 'yaml' && !pseudo && value !== null && !loading && !error && !readOnly
 
       return h('div', { className: 'dk-detail-tab' },
         h('div', { className: 'dk-drawer-head' },
@@ -2589,6 +2610,12 @@ window.__ModuleLoader__.load({
         await reload()
       }, [reload, t])
 
+      const setMode = useCallback(async (name, readOnly) => {
+        const result = await call('set-cluster-mode', { cluster: name, readOnly })
+        if (!result.ok) setNotice(result.error)
+        await reload()
+      }, [reload])
+
       const openAdd = useCallback(() => setModal({ mode: 'add' }), [])
       const openEdit = useCallback(async (name) => {
         try {
@@ -2632,6 +2659,15 @@ window.__ModuleLoader__.load({
                 `${authLabel(t, entry.auth)} · ${entry.server || '—'} · ns ${entry.namespace || 'default'}`,
               ),
             ),
+            h('select', {
+              className: 'dk-select mode' + (entry.readOnly ? ' ro' : ''),
+              title: t('mode.hint'),
+              value: entry.readOnly ? 'readonly' : 'readwrite',
+              onChange: (event) => setMode(entry.name, event.target.value === 'readonly'),
+            }, [
+              h('option', { key: 'rw', value: 'readwrite' }, t('mode.readwrite')),
+              h('option', { key: 'ro', value: 'readonly' }, t('mode.readonly')),
+            ]),
             h('button', { className: 'dk-btn ghost', onClick: () => openEdit(entry.name) }, t('cluster.edit')),
             h('button', { className: 'dk-btn ghost danger', onClick: () => remove(entry.name) }, t('btn.remove')),
           )),
@@ -2665,6 +2701,29 @@ window.__ModuleLoader__.load({
     // Numeric sort key for a node usage cell such as "1.75/8", "1.4Gi/32Gi" or
     // "12/110": parse the *used* part of the fraction. Unparsable ("—" when the
     // usage read failed) yields -1 so it sorts to the front ascending.
+    // Sort key for the 存在时长 column. Prefer the real creationTimestamp when
+    // the backend supplied one (nodes, CRD instances); the tabular rows only
+    // carry kubectl's human AGE text like "3y323d", "2d4h", "45m", "<unknown>",
+    // which we parse into milliseconds so "3y323d" sorts before "5m". Unknown
+    // or unparseable values return -1 so they settle at the end of an asc sort.
+    const ageMs = (row) => {
+      const created = row && row.created
+      if (created) {
+        const t = new Date(created).getTime()
+        if (Number.isFinite(t)) return t
+      }
+      const text = String((row && row.age) || '').trim()
+      const m = /^(\d+y)?(\d+d)?(\d+h)?(\d+m)?(\d+s)?$/.exec(text)
+      if (!m) return -1
+      let sec = 0
+      if (m[1]) sec += parseInt(m[1], 10) * 365 * 86400
+      if (m[2]) sec += parseInt(m[2], 10) * 86400
+      if (m[3]) sec += parseInt(m[3], 10) * 3600
+      if (m[4]) sec += parseInt(m[4], 10) * 60
+      if (m[5]) sec += parseInt(m[5], 10)
+      return sec * 1000
+    }
+
     const nodeMetric = (row, key) => {
       const used = String((row && row[key]) || '').split('/')[0].trim()
       if (!used || used === '—') return -1
@@ -2726,6 +2785,9 @@ window.__ModuleLoader__.load({
       // each an array of selected values (empty = show all).
       const [nodeSort, setNodeSort] = useState(null)
       const [nodeColFilter, setNodeColFilter] = useState({ arch: [], type: [], zone: [] })
+      // Generic list column sort (name / namespace / age) for every resource
+      // type that is neither pods nor nodes; dir: 1 asc | -1 desc, or null.
+      const [genericSort, setGenericSort] = useState(null)
       // Pod rows expanded to show their containers. Key = "ns/name", value =
       // { loading, containers, initContainers, error }. Containers are fetched
       // lazily on first expand and kept while the row stays expanded.
@@ -3020,6 +3082,7 @@ window.__ModuleLoader__.load({
         setPodColFilter({ status: [], node: [], ip: [] })
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
+        setGenericSort(null)
         setExpanded({})
         try { await call('switch', { cluster: value }) } catch {}
         const need = await probeSelected(value)
@@ -3042,6 +3105,7 @@ window.__ModuleLoader__.load({
         setPodColFilter({ status: [], node: [], ip: [] })
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
+        setGenericSort(null)
         setExpanded({})
         loadList(selected, listKind, value)
       }, [selected, listKind, loadList])
@@ -3055,6 +3119,7 @@ window.__ModuleLoader__.load({
         setPodColFilter({ status: [], node: [], ip: [] })
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
+        setGenericSort(null)
         setExpanded({})
         const scope = isKindScoped(value) ? [] : nsSel
         if (scope.length !== nsSel.length) setNsSel(scope)
@@ -3077,6 +3142,7 @@ window.__ModuleLoader__.load({
         setPodColFilter({ status: [], node: [], ip: [] })
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
+        setGenericSort(null)
         setExpanded({})
         // Open on all namespaces: the CRD list is cluster-scoped, so any
         // namespace selection still around belongs to an earlier kind.
@@ -3108,6 +3174,7 @@ window.__ModuleLoader__.load({
             setPodColFilter({ status: [], node: [], ip: [] })
             setNodeSort(null)
             setNodeColFilter({ arch: [], type: [], zone: [] })
+            setGenericSort(null)
             setExpanded({})
             const scope = [result.namespace || row.namespace || 'default']
             if (scope[0] !== nsSel[0]) setNsSel(scope)
@@ -3133,6 +3200,7 @@ window.__ModuleLoader__.load({
         setPodColFilter({ status: [], node: nodeName ? [String(nodeName)] : [], ip: [] })
         setNodeSort(null)
         setNodeColFilter({ arch: [], type: [], zone: [] })
+        setGenericSort(null)
         setExpanded({})
         if (nsSel.length) setNsSel([])
         loadList(selected, 'pods', [])
@@ -3207,11 +3275,7 @@ window.__ModuleLoader__.load({
           if (podSort) {
             const { key, dir } = podSort
             out = out.slice().sort((a, b) => {
-              if (key === 'age') {
-                const ta = a.created ? new Date(a.created).getTime() : 0
-                const tb = b.created ? new Date(b.created).getTime() : 0
-                return (ta - tb) * dir
-              }
+              if (key === 'age') return (ageMs(a) - ageMs(b)) * dir
               const va = String(a[key] ?? '').toLowerCase()
               const vb = String(b[key] ?? '').toLowerCase()
               return va.localeCompare(vb) * dir
@@ -3229,11 +3293,7 @@ window.__ModuleLoader__.load({
           if (nodeSort) {
             const { key, dir } = nodeSort
             out = out.slice().sort((a, b) => {
-              if (key === 'age') {
-                const ta = a.created ? new Date(a.created).getTime() : 0
-                const tb = b.created ? new Date(b.created).getTime() : 0
-                return (ta - tb) * dir
-              }
+              if (key === 'age') return (ageMs(a) - ageMs(b)) * dir
               if (key === 'cpu' || key === 'memory' || key === 'podCount') {
                 return (nodeMetric(a, key) - nodeMetric(b, key)) * dir
               }
@@ -3241,8 +3301,20 @@ window.__ModuleLoader__.load({
             })
           }
         }
+        // Everything else: name / namespace / age columns are sortable. Age
+        // compares by creationTimestamp, name/namespace by text.
+        if (!podList && String(kind).split('.')[0] !== 'nodes' && genericSort) {
+          const { key, dir } = genericSort
+          out = out.slice().sort((a, b) => {
+            if (key === 'age') return (ageMs(b) - ageMs(a)) * dir
+            const field = key === 'ns' ? 'namespace' : key
+            const va = String(a[field] ?? '').toLowerCase()
+            const vb = String(b[field] ?? '').toLowerCase()
+            return va.localeCompare(vb) * dir
+          })
+        }
         return out
-      }, [rows, filter, podFilter, kind, podColFilter, podSort, nodeColFilter, nodeSort])
+      }, [rows, filter, podFilter, kind, podColFilter, podSort, nodeColFilter, nodeSort, genericSort])
 
       // A drilled-in CRD kind is tracked explicitly: it is not in KINDS, so its
       // namespace scope comes from the CRD row it was opened from.
@@ -3274,9 +3346,12 @@ window.__ModuleLoader__.load({
       ].includes(loggableBase)
       // 状态 column is not shown for ingresses (its table exposes class/hosts).
       const showStatusColumn = loggableBase !== 'ingresses'
+      // Read-only clusters (user-set mode) hide the ops column entirely: the
+      // backend also refuses every write on these clusters.
+      const readOnly = (clusters.find((entry) => entry.name === selected) || {}).readOnly === true
       // Every real resource gets an 操作 column (at least 删除); only the RBAC
-      // user/group pseudo-rows offer no actions.
-      const showOpsColumn = opsFor(loggableBase).length > 0
+      // user/group pseudo-rows offer no actions, and read-only clusters hide it.
+      const showOpsColumn = opsFor(loggableBase).length > 0 && !readOnly
       // Ingress rows expose IngressClass and host(s).
       const showClassColumn = loggableBase === 'ingresses'
       const showHostColumn = loggableBase === 'ingresses'
@@ -3619,18 +3694,28 @@ window.__ModuleLoader__.load({
       // Node list: cpu/memory/podCount/arch/type/zone/age are sortable; arch/type/zone
       // additionally offer a multi-select filter.
       const nodeTh = makeTh(nodeSort, setNodeSort, nodeColFilter, setNodeColFilter, nodeColOptions)
-      const NODE_SORTABLE = { cpu: 'col.cpu', memory: 'col.memory', podCount: 'col.podcount', arch: 'col.arch', type: 'col.type', zone: 'col.zone', age: 'col.age' }
+      // Node name joins the sortable set (user asked for name/age/ns sorting on
+      // every resource; nodes have no namespace column).
+      const NODE_SORTABLE = { name: 'col.name', cpu: 'col.cpu', memory: 'col.memory', podCount: 'col.podcount', arch: 'col.arch', type: 'col.type', zone: 'col.zone', age: 'col.age' }
+      // Every other resource type: name / namespace / age sortable (namespace
+      // only when the column is actually shown).
+      const GENERIC_SORTABLE = { name: 'col.name', ns: 'col.namespace', age: 'col.age' }
+      const genericTh = makeTh(genericSort, setGenericSort, {}, {}, {})
       const NODE_FILTERABLE = { arch: true, type: true, zone: true }
 
       const spec = activeCrd ? crdCols : (kindCols[loggableBase] || genericCols)
       const isNodes = loggableBase === 'nodes'
       const columns = spec
-        .map((col) => ({
-          th: isNodes && NODE_SORTABLE[col]
-            ? nodeTh(col, t(NODE_SORTABLE[col]), NODE_FILTERABLE[col] ? { filter: col } : {})
-            : TH[col](),
-          td: td[col],
-        }))
+        .map((col) => {
+          if (isNodes && NODE_SORTABLE[col]) {
+            return { th: nodeTh(col, t(NODE_SORTABLE[col]), NODE_FILTERABLE[col] ? { filter: col } : {}), td: td[col] }
+          }
+          const gl = GENERIC_SORTABLE[col]
+          if (gl && (col !== 'ns' || showNamespaceColumn)) {
+            return { th: genericTh(col, t(gl)), td: td[col] }
+          }
+          return { th: TH[col](), td: td[col] }
+        })
         .filter((entry) => entry.th !== null)
       const colCount = isPods
         ? (1
@@ -3651,6 +3736,7 @@ window.__ModuleLoader__.load({
         currentClusterBadge = h('span', { className: badgeClass(selectedState?.state) }, stateLabel(t, selectedState?.state))
       }
       const infoBadges = []
+      if (readOnly) infoBadges.push(h('span', { className: 'dk-badge count', key: 'ro', title: t('mode.hint') }, t('mode.readonly')))
       if (clusterInfo?.version) infoBadges.push(h('span', { className: 'dk-badge info', key: 'v' }, clusterInfo.version))
       if (clusterInfo?.user) infoBadges.push(h('span', { className: 'dk-badge info', key: 'u' }, clusterInfo.user))
       const defaultNs = selectedCluster?.namespace || namespaces[0] || 'default'
