@@ -2387,16 +2387,28 @@ window.__ModuleLoader__.load({
         document.head.appendChild(el)
       })
       xtermLoader = (async () => {
-        if (!document.querySelector('link[data-dk-xterm]')) {
-          const link = document.createElement('link')
-          link.rel = 'stylesheet'
-          link.href = `${TERM_ASSETS}/xterm.css`
-          link.setAttribute('data-dk-xterm', '1')
-          document.head.appendChild(link)
+        // The vendored UMD bundles branch on a global AMD `define` (a page-level
+        // RequireJS/loader.js) and would then call anonymous `define([], t)` —
+        // registering into the loader instead of assigning `window.Terminal`, so
+        // `window.Terminal` stays undefined and the pane fails. Temporarily hide
+        // `define` for the duration of the injection so the bundles always fall
+        // through to the global-assignment branch, then restore it.
+        const prevDefine = window.define
+        window.define = undefined
+        try {
+          if (!document.querySelector('link[data-dk-xterm]')) {
+            const link = document.createElement('link')
+            link.rel = 'stylesheet'
+            link.href = `${TERM_ASSETS}/xterm.css`
+            link.setAttribute('data-dk-xterm', '1')
+            document.head.appendChild(link)
+          }
+          await script(`${TERM_ASSETS}/xterm.js`)
+          await script(`${TERM_ASSETS}/addon-fit.js`)
+          if (!window.Terminal) throw new Error('xterm.js 加载失败')
+        } finally {
+          window.define = prevDefine
         }
-        await script(`${TERM_ASSETS}/xterm.js`)
-        await script(`${TERM_ASSETS}/addon-fit.js`)
-        if (!window.Terminal) throw new Error('xterm.js 加载失败')
       })()
       xtermLoader.catch(() => { xtermLoader = null })
       return xtermLoader
